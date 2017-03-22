@@ -280,11 +280,26 @@ class filter:
 
         return imgOuty
 
-    def apply(self, imgIn):
+    def compute(self, imgIn):
         if self.conf['method'] == 'custom':
             imgOut = self.customFilter(imgIn)
         elif self.conf['method'] == 'bilateral':
             imgOut = cv2.bilateralFilter(outImg, 15, 100, 30)
+
+        return imgOut
+
+class threshold:
+    """A class thresholding the image """
+    def __init__(self, conf, logger):
+        self.logger = logger
+        self.conf = conf
+
+    def compute(self, imgIn):
+        maxValue = np.iinfo(imgIn.dtype).max
+        thresholdValue =  np.percentile(imgIn, self.conf['value'])
+        self.logger.debug('Percentile value: %.2f, threshold value: %.2f',
+                                            thresholdValue, self.conf['value'])
+        ret, imgOut = cv2.threshold(imgIn, thresholdValue, maxValue, cv2.THRESH_BINARY)
         return imgOut
 
 class laneDetector:
@@ -313,8 +328,23 @@ class laneDetector:
             conf[k] = v
 
         self.filter = filter(conf, self.logger)
-        imgOut = self.filter.apply(img)
+        imgOut = self.filter.compute(img)
         return imgOut
+
+    def threshold(self, img):
+        conf = {}
+        if not self.config.has_section('threshold'):
+            self.logger.error('No threshold configuration found !')
+            return
+
+        for (k, v) in self.config.items('threshold'):
+            conf[k] = v
+        conf['value'] = self.config.getfloat('threshold', 'value')
+
+        self.threshold = threshold(conf, self.logger)
+        imgOut = self.threshold.compute(img)
+        return imgOut
+
 
     def getIPM(self, _file):
         conf = {}
@@ -386,8 +416,8 @@ def main():
     cv2.imshow('IPM', outImg);
     outImgFiltered = detector.filter(outImg)
     cv2.imshow('IPM Filtered', outImgFiltered);
-
-
+    outImgThresholded = detector.threshold(outImg)
+    cv2.imshow('IPM Thresholded', outImgThresholded);
     cv2.waitKey(0);
     cv2.destroyAllWindows();
 
