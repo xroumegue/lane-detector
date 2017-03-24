@@ -26,7 +26,7 @@ def interpolation(array,x,y):
 
 class ipm:
     def __init__(self, conf, logger = None):
-       self.logger = logger 
+       self.logger = logger
        self.conf = conf
        self.vp = self._getVanishingPoint()
        self.roi = self._getROI()
@@ -71,7 +71,7 @@ class ipm:
         vp = T.dot(vp)
         self.logger.debug('Vanishing point coordinates: (%.3f, %.3f)', vp[0], vp[1])
 
-        return vp                
+        return vp
 
     def Tw2i(self, _in):
         c1 = self.conf['c1']
@@ -100,7 +100,7 @@ class ipm:
         return i[[0,1],:]
 
     def _getROI(self):
-        vp = self.vp 
+        vp = self.vp
 
         ipmTop = self.conf['ipmTop']
         ipmBottom = self.conf['ipmBottom']
@@ -108,7 +108,7 @@ class ipm:
         ipmLeft = self.conf['ipmLeft']
         ipmWidth = self.conf['ipmWidth']
         ipmHeight = self.conf['ipmHeight']
-    
+
         iROI = np.float32(
                 [
                     [ vp[0], ipmTop],
@@ -170,7 +170,7 @@ class ipm:
         return self.roi
 
     def load(self, _file):
-        self.img = cv2.imread(_file)
+        self.img = cv2.imread(_file, cv2.IMREAD_GRAYSCALE)
 
     def compute(self):
         width = self.conf['ipmWidth']
@@ -180,7 +180,7 @@ class ipm:
         top = self.conf['ipmTop']
         bottom = self.conf['ipmBottom']
 
-        out = np.zeros([height, width, 3], dtype= np.uint8)
+        out = np.zeros([height, width], dtype= np.uint8)
         self.out = out
 
         wOut = np.zeros([height,width, 2], dtype=np.float32)
@@ -295,12 +295,100 @@ class threshold:
         self.conf = conf
 
     def compute(self, imgIn):
+
+        if 'method' in self.conf.keys():
+            method = self.conf['method']
+        else:
+            self.logger.error('No threshold method solution, fallback to binary')
+            method = 'binary'
+
         maxValue = np.iinfo(imgIn.dtype).max
         thresholdValue =  np.percentile(imgIn, self.conf['value'])
         self.logger.debug('Percentile value: %.2f, threshold value: %.2f',
                                             thresholdValue, self.conf['value'])
-        ret, imgOut = cv2.threshold(imgIn, thresholdValue, maxValue, cv2.THRESH_BINARY)
+        if method == 'binary':
+            cv2Method = cv2.THRESH_BINARY
+        elif method == 'tozero':
+            cv2Method = cv2.THRESH_TOZERO
+
+        ret, imgOut = cv2.threshold(imgIn, thresholdValue, maxValue, cv2Method)
+
         return imgOut
+
+
+class lines:
+    """A class detecting lines in the image """
+    def __init__(self, conf, logger):
+        self.logger = logger
+        self.conf = conf
+
+    def customCompute(self, imgIn, lineType = 'vertical'):
+        if 'threshold' in self.conf.keys():
+            detectionThreshold = self.conf['threshold']
+        else:
+            self.logger.error('No threshold value found...using default')
+            detectionThreshold = 50 #TODO: Refine me
+
+        if lineType == 'horizontal':
+            dimVector = int(1)
+        elif lineType == 'vertical':
+            dimVector = int(0)
+
+        imgVector = cv2.reduce(imgIn, dimVector, cv2.REDUCE_SUM, dtype=cv2.CV_32F)
+        if 'smooth' in self.conf.keys():
+            smoothKernel = np.float32([
+                                        0.000003726653172, 0.000040065297393, 0.000335462627903,
+                                        0.002187491118183, 0.011108996538242, 0.043936933623407,
+                                        0.135335283236613, 0.324652467358350, 0.606530659712633,
+                                        0.882496902584595, 1.000000000000000, 0.882496902584595,
+                                        0.606530659712633, 0.324652467358350, 0.135335283236613,
+                                        0.043936933623407, 0.011108996538242, 0.002187491118183,
+                                        0.000335462627903, 0.000040065297393, 0.000003726653172
+                                    ]
+                    )
+            imgVector = cv2.filter2D(imgVector, -1, smoothKernel)
+
+        imgVector = imgVector.flatten()
+        minVal, maxVal, minLoc, maxLoc = cv2.minMaxLoc(imgVector)
+        lines = []
+        localMax = []
+        for i in range(2, imgVector.size - 2):
+            val = imgVector[i]
+            if val > imgVector[i-1] \
+                    and val > imgVector[i+1]\
+                    and val > detectionThreshold:
+                localMax.append((i, val))
+
+        if len(localMax) == 0:
+            localMax.append((maxLoc, maxVal))
+
+        # Subpixel
+        for (index, val) in localMax:
+            x = np.float32([
+                            [1, -1, 1],
+                            [0,  0, 1],
+                            [1,  1, 1]
+                    ]
+                )
+
+            y = np.float32([imgVector[max(0, index - 1)], val, imgVector[min(len(imgVector) - 1, index)]])
+            _, a = cv2.solve(x, y, flags = cv2.DECOMP_SVD)
+            indexSub = float((-0.5 * a[1]/a[0]) + index)
+            if lineType == 'horizontal':
+                myLine = [(0.5, indexSub + 0.5), (imgIn.shape[1] - 0.5, indexSub + 0.5)]
+            elif lineType == 'vertical':
+                myLine = [(indexSub + 0.5, 0.5), (indexSub + 0.5, imgIn.shape[0] - 0.5)]
+
+            lines.append(myLine)
+
+        for _line in lines:
+            self.logger.debug("%s lines detected: %s", lineType, _line)
+
+        return lines
+
+    def compute(self, imgIn, lineType = 'vertical'):
+        if self.conf['method'] == 'custom':
+            return self.customCompute(imgIn, lineType)
 
 class laneDetector:
     """A class detecting lanes on road picture"""
@@ -345,6 +433,18 @@ class laneDetector:
         imgOut = self.threshold.compute(img)
         return imgOut
 
+    def lines(self, img):
+        conf = {}
+        if not self.config.has_section('lines'):
+            self.logger.error('No lines configuration found !')
+            return
+
+        for (k, v) in self.config.items('lines'):
+            conf[k] = v
+            conf['threshold'] = self.config.getfloat('lines', 'threshold')
+
+        self.lines = lines(conf, self.logger)
+        return self.lines.compute(img)
 
     def getIPM(self, _file):
         conf = {}
@@ -380,8 +480,6 @@ class laneDetector:
         outImg = myIpm.compute()
         return outImg
 
-
-
 def parse_cmdline(parser):
 	parser.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG, default=logging.INFO, help='Be verbose...')
 	parser.add_argument('-i', '--image', help='Image file')
@@ -389,7 +487,6 @@ def parse_cmdline(parser):
 	parser.add_argument('-l', '--lanes', default='Lanes.conf', help='Lane configuration file')
 
 	return parser.parse_args()
-
 
 def main():
     parser = ArgumentParser(description= "Apply an Inverse Perspective Mapping on a img")
@@ -411,13 +508,25 @@ def main():
     detector.readConf(args.camera)
     detector.readConf(args.lanes)
 
+    # IPM
     outImg = detector.getIPM(args.image)
     cv2.imwrite("IPM-out.jpg", outImg)
     cv2.imshow('IPM', outImg);
+
+    # Filter out "noise"
     outImgFiltered = detector.filter(outImg)
     cv2.imshow('IPM Filtered', outImgFiltered);
+
+    # Threshold
     outImgThresholded = detector.threshold(outImg)
     cv2.imshow('IPM Thresholded', outImgThresholded);
+
+    # Detecting lines
+    myLines = detector.lines(outImgThresholded)
+    for _line in myLines:
+        cv2.line(outImgThresholded, tuple(round(_) for _ in _line[0]), tuple(round(_) for _ in _line[1]), (255, 0, 0), 1)
+
+    cv2.imshow('IPM vertical lines', outImgThresholded);
     cv2.waitKey(0);
     cv2.destroyAllWindows();
 
