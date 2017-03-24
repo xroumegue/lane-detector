@@ -7,6 +7,7 @@ import numpy as np;
 import cv2;
 import math;
 
+DETECTOR_LOGGER_NAME = "Lanes Detector"
 
 def interpolation(array,x,y):
     s = array.shape
@@ -25,8 +26,8 @@ def interpolation(array,x,y):
     return t1*u1*array[j][i]+t*u1*array[j+1][i]+t*u*array[j+1][i+1]+t1*u*array[j][i+1]
 
 class ipm:
-    def __init__(self, conf, logger = None):
-       self.logger = logger
+    def __init__(self, conf):
+       self.logger = logging.getLogger(DETECTOR_LOGGER_NAME)
        self.conf = conf
        self.vp = self._getVanishingPoint()
        self.roi = self._getROI()
@@ -211,8 +212,8 @@ class ipm:
 
 class filter:
     """A class filtering road image"""
-    def __init__(self, conf, logger = None):
-        self.logger = logger
+    def __init__(self, conf):
+        self.logger = logging.getLogger(DETECTOR_LOGGER_NAME)
         self.conf = conf
 
     def customFilter(self, imgIn, lineType= 'vertical'):
@@ -290,8 +291,8 @@ class filter:
 
 class threshold:
     """A class thresholding the image """
-    def __init__(self, conf, logger):
-        self.logger = logger
+    def __init__(self, conf):
+        self.logger = logging.getLogger(DETECTOR_LOGGER_NAME)
         self.conf = conf
 
     def compute(self, imgIn):
@@ -315,11 +316,17 @@ class threshold:
 
         return imgOut
 
+class line:
+    """ A class describibg a line in a image """
+    def __init__(self, conf):
+        self.logger = logging.getLogger(DETECTOR_LOGGER_NAME)
+        self.conf = conf
+
 
 class lines:
     """A class detecting lines in the image """
-    def __init__(self, conf, logger):
-        self.logger = logger
+    def __init__(self, conf):
+        self.logger = logging.getLogger(DETECTOR_LOGGER_NAME)
         self.conf = conf
 
     def customCompute(self, imgIn, lineType = 'vertical'):
@@ -398,7 +405,7 @@ class laneDetector:
         self.config = configparser.ConfigParser(inline_comment_prefixes=('#'))
         # create logger
         logging.basicConfig(format=FORMAT)
-        self.logger = logging.getLogger('Lane Detection')
+        self.logger = logging.getLogger(DETECTOR_LOGGER_NAME)
 
     def readConf(self, _file):
         if os.path.isfile(_file):
@@ -415,7 +422,7 @@ class laneDetector:
         for (k, v) in self.config.items('filter'):
             conf[k] = v
 
-        self.filter = filter(conf, self.logger)
+        self.filter = filter(conf)
         imgOut = self.filter.compute(img)
         return imgOut
 
@@ -429,7 +436,7 @@ class laneDetector:
             conf[k] = v
         conf['value'] = self.config.getfloat('threshold', 'value')
 
-        self.threshold = threshold(conf, self.logger)
+        self.threshold = threshold(conf)
         imgOut = self.threshold.compute(img)
         return imgOut
 
@@ -443,7 +450,7 @@ class laneDetector:
             conf[k] = v
             conf['threshold'] = self.config.getfloat('lines', 'threshold')
 
-        self.lines = lines(conf, self.logger)
+        self.lines = lines(conf)
         return self.lines.compute(img)
 
     def getIPM(self, _file):
@@ -468,7 +475,7 @@ class laneDetector:
         conf['ipmRight'] = self.config.getint('ipm', 'ipmRight')
         conf['ipmInterpolation'] = self.config.getint('ipm', 'ipmInterpolation')
 
-        myIpm = ipm(conf, self.logger)
+        myIpm = ipm(conf)
 
 #        cv2.imshow('street', img);
 #        cv2.waitKey(0);
