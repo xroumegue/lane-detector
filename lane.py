@@ -318,10 +318,45 @@ class threshold:
 
 class line:
     """ A class describibg a line in a image """
-    def __init__(self, conf):
+    def __init__(self, pts, score):
         self.logger = logging.getLogger(DETECTOR_LOGGER_NAME)
-        self.conf = conf
+        self.pts = []
+        if (not isinstance(pts, list)):
+            self.logger.error("Must have a list of points")
+            return
 
+        if (not all(isinstance(_, tuple) for _ in pts)):
+            self.logger.error("Must have a list of points")
+            return
+
+        self.pts = pts
+        self.score = score
+
+
+    def getCartesian(self):
+        return self.pts
+
+    def _getPolar(self):
+        #vertical line
+        if self.pts[0][0] == self.pts[1][0]:
+            self.r = abs(self.pts[0][0])
+            self.theta = 0. if self.pts[0][0] >=0 else np.pi;
+        #Horizontal line
+        elif self.pts[0][1] == self.pts[1][1]:
+            self.r = abs(self.pts[0][1])
+            self.theta = np.pi/2 if self.pts[0][1] >=0 else -np.pi/2;
+        # General case
+        else:
+            self.theta = atan2((self.pts[1][0] - self.pts[0][0])/(self.pts[0][1] - self.pts[1][1]))
+            self.r = r1 = self.pts[0][0] * cos(self.theta) + self.pts[0][1] * sin(self.theta)
+            r2 = self.pts[1][0] * cos(self.theta) + self.pts[1][1] * sin(self.theta)
+            if r1 < 0 or r2 < 0:
+                self.theta += np.pi
+                if self.theta > np.pi:
+                    self.theta -= 2*np.pi
+                self.r = abs(r1)
+
+        return (self.r, self.theta)
 
 class lines:
     """A class detecting lines in the image """
@@ -386,10 +421,10 @@ class lines:
             elif lineType == 'vertical':
                 myLine = [(indexSub + 0.5, 0.5), (indexSub + 0.5, imgIn.shape[0] - 0.5)]
 
-            lines.append(myLine)
+            lines.append(line(myLine, imgVector[index]))
 
         for _line in lines:
-            self.logger.debug("%s lines detected: %s", lineType, _line)
+            self.logger.debug("%s lines detected: %s", lineType, _line.getCartesian())
 
         return lines
 
@@ -531,7 +566,8 @@ def main():
     # Detecting lines
     myLines = detector.lines(outImgThresholded)
     for _line in myLines:
-        cv2.line(outImgThresholded, tuple(round(_) for _ in _line[0]), tuple(round(_) for _ in _line[1]), (255, 0, 0), 1)
+        __line = _line.getCartesian()
+        cv2.line(outImgThresholded, tuple(round(_) for _ in __line[0]), tuple(round(_) for _ in __line[1]), (255, 0, 0), 1)
 
     cv2.imshow('IPM vertical lines', outImgThresholded);
     cv2.waitKey(0);
