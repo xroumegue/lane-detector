@@ -317,43 +317,151 @@ class threshold:
         return imgOut
 
 class line:
-    """ A class describibg a line in a image """
-    def __init__(self, pts, score):
+    """ A class describing a line(https://en.wikipedia.org/wiki/Line_(geometry)) in a image """
+    def __init__(self, ptsPolar, score = None, box = None):
         self.logger = logging.getLogger(DETECTOR_LOGGER_NAME)
-        self.pts = []
-        if (not isinstance(pts, list)):
+        self.pts = None
+        self.r = None
+        self.theta = None
+        self.origin = None
+        self.score = score if score is not None else None
+        self.box = box if box is not None else None
+
+#       slope = np.tan(self.theta)
+#       intercept = self.r / np.sin(self.theta)
+
+        if (not isinstance(ptsPolar, list)):
+            self.logger.error("Must be a list")
+            return
+
+        if (not all(isinstance(_, tuple) for _ in ptsPolar)):
             self.logger.error("Must have a list of points")
             return
 
-        if (not all(isinstance(_, tuple) for _ in pts)):
-            self.logger.error("Must have a list of points")
+        if (len(ptsPolar) > 2):
+            self.logger.error("Must have at most 2 tuples")
             return
 
-        self.pts = pts
+
+        if len(ptsPolar) == 1:
+            self.r = ptsPolar[0][0]
+            self.theta = ptsPolar[0][1]
+        elif len(ptsPolar) == 2:
+            self.pts = ptsPolar
+
+    def setBox(self, box):
+        self.box = box
+
+    def setScore(self, score):
         self.score = score
 
+    def getScore(self):
+        return self.score
 
-    def getCartesian(self):
+    def setPts(self, pts):
+        if pts is not None:
+            if (not isinstance(pts, list)):
+                self.logger.error("Must have a list of points")
+                return
+
+            if (not all(isinstance(_, tuple) for _ in pts)):
+                self.logger.error("Must have a list of points")
+                return
+
+            self.pts = pts
+        else:
+                self.logger.error("Point list must not be None")
+
+    def setPolar(self, r, theta):
+        self.r = r
+        self.theta = theta
+
+    def _getOrigin(self):
+        (r, theta) = self.getPolar()
+        self.origin = (r * math.cos(theta), r * math.sin(theta))
+
+        return self.origin
+
+    def getOrigin(self):
+        if self.origin is None:
+            self._getOrigin()
+
+        return self.origin
+
+    def _getCartesian(self):
+        if self.pts is not None:
+            return self.pts
+
+        if self.r is None or self.theta is None:
+            self.logger.error("A line must have either polar or cartesian coordinate")
+
+        if self.theta == math.pi or self.theta == 0:
+            # vertical lines
+            pts = [(self.r, self.box[0][1]), (self.r, self.box[1][1])]
+        elif self.theta == math.pi/2 or self.theta == -math.pi/2:
+            # Horizontal lines
+            pts = [(self.box[0][0], self.r), (self.box[1][0], self.r)]
+        else:
+            # General case
+            # r = x * cos(theta) + y * sin(theta)
+            o = self.getOrigin()
+            y = [self.box[0][1], self.box[1][1]].sort()
+            x = [self.box[0][0], self.box[1][0]].sort()
+
+            if not ((y[1] >= o[1] >= y[0]) and (x[1] >= o[0] >= x[0])):
+                self.logger.error('Origin point {} not in box ({} {})'.format(o, x, y))
+                return None
+            r = self.r
+            t = self.theta
+            sol = [
+                        ((r - y[1] * math.sin(t)) / math.cos(t), y[1]),
+                        ((r - y[0] * math.sin(t)) / math.cos(t), y[0]),
+                        ((x[0], (r - x[0] * math.cos(t)) / math.sin(t))),
+                        ((x[1], (r - x[1] * math.cos(t)) / math.sin(t))),
+            ]
+            pts = []
+            for _ in sol:
+                if  x[1] >= _[0] >= x[0]  and y[1] >= _[1] >= y[0]:
+                    pts.append(_)
+
+        self.pts = pts
         return self.pts
+
+    def getCartesian(self, box = None):
+        if self.pts is None:
+            if box is None and self.box is None:
+                self.logger.error("A box must be specified")
+                return
+            if box is not None:
+                self.setBox(box)
+            self._getCartesian()
+
+        return self.pts
+
+    def getPolar(self):
+        if self.r is None or self.theta is None:
+            self._getPolar()
+
+        return (self.r, self.theta)
 
     def _getPolar(self):
         #vertical line
         if self.pts[0][0] == self.pts[1][0]:
             self.r = abs(self.pts[0][0])
-            self.theta = 0. if self.pts[0][0] >=0 else np.pi;
+            self.theta = 0. if self.pts[0][0] >=0 else math.pi;
         #Horizontal line
         elif self.pts[0][1] == self.pts[1][1]:
             self.r = abs(self.pts[0][1])
-            self.theta = np.pi/2 if self.pts[0][1] >=0 else -np.pi/2;
+            self.theta = math.pi/2 if self.pts[0][1] >=0 else -math.pi/2;
         # General case
         else:
-            self.theta = atan2((self.pts[1][0] - self.pts[0][0])/(self.pts[0][1] - self.pts[1][1]))
-            self.r = r1 = self.pts[0][0] * cos(self.theta) + self.pts[0][1] * sin(self.theta)
-            r2 = self.pts[1][0] * cos(self.theta) + self.pts[1][1] * sin(self.theta)
+            self.theta = math.atan2((self.pts[1][0] - self.pts[0][0])/(self.pts[0][1] - self.pts[1][1]))
+            self.r = r1 = self.pts[0][0] * math.cos(self.theta) + self.pts[0][1] * math.sin(self.theta)
+            r2 = self.pts[1][0] * math.cos(self.theta) + self.pts[1][1] * math.sin(self.theta)
             if r1 < 0 or r2 < 0:
-                self.theta += np.pi
-                if self.theta > np.pi:
-                    self.theta -= 2*np.pi
+                self.theta += math.pi
+                if self.theta > math.pi:
+                    self.theta -= 2 * math.pi
                 self.r = abs(r1)
 
         return (self.r, self.theta)
@@ -363,6 +471,31 @@ class lines:
     def __init__(self, conf):
         self.logger = logging.getLogger(DETECTOR_LOGGER_NAME)
         self.conf = conf
+
+    def group(self, _lines):
+        gLines = _lines[:]
+        minD = self.conf['minDistance']
+        i = 0
+        while len(gLines) > 1:
+            oA = np.asarray(gLines[i].getOrigin())
+            oB = np.asarray(gLines[i+1].getOrigin())
+            oD = oB - oA
+            d = np.linalg.norm(oD)
+            if d < minD:
+                # TODO/FIXME: Should we determine the new pow 'score weightly' 
+                o = oA + oD/2
+                p = np.linalg.norm(o)
+                t = math.atan2(o[1], o[0])
+                score = (gLines[i].getScore() + gLines[i+1].getScore()) / 2
+                self.logger.debug("Grouping line {} with {} to {}".format(
+                                gLines[i].getPolar(), gLines[i+1].getPolar(), (p, t)))
+                gLines[i] = line([(p, t)], score, box = self.conf['box'])
+                del gLines[i+1]
+            else:
+                i += 1
+                if i == len(gLines) - 1:
+                    break
+        return gLines
 
     def customCompute(self, imgIn, lineType = 'vertical'):
         if 'threshold' in self.conf.keys():
@@ -421,7 +554,7 @@ class lines:
             elif lineType == 'vertical':
                 myLine = [(indexSub + 0.5, 0.5), (indexSub + 0.5, imgIn.shape[0] - 0.5)]
 
-            lines.append(line(myLine, imgVector[index]))
+            lines.append(line(myLine, imgVector[index], box = self.conf['box']))
 
         for _line in lines:
             self.logger.debug("%s lines detected: %s", lineType, _line.getCartesian())
@@ -430,13 +563,16 @@ class lines:
 
     def compute(self, imgIn, lineType = 'vertical'):
         if self.conf['method'] == 'custom':
-            return self.customCompute(imgIn, lineType)
+            self.rawLines = self.customCompute(imgIn, lineType)
+
+        self.groupLines = self.group(self.rawLines)
+        return self.groupLines
 
 class laneDetector:
     """A class detecting lanes on road picture"""
 
     def __init__(self):
-        FORMAT = '%(asctime)-15s-%(levelname)-8s-%(message)s'
+        FORMAT = '%(asctime)-15s-%(levelname)-5s-%(funcName)-8s-%(lineno)-4s-%(message)s'
         self.config = configparser.ConfigParser(inline_comment_prefixes=('#'))
         # create logger
         logging.basicConfig(format=FORMAT)
@@ -483,7 +619,10 @@ class laneDetector:
 
         for (k, v) in self.config.items('lines'):
             conf[k] = v
-            conf['threshold'] = self.config.getfloat('lines', 'threshold')
+
+        conf['threshold'] = self.config.getfloat('lines', 'threshold')
+        conf['minDistance'] = self.config.getfloat('lines', 'minDistance')
+        conf['box'] = [(0, 0), (img.shape[1] - 1, img.shape[0] - 1)]
 
         self.lines = lines(conf)
         return self.lines.compute(img)
@@ -512,9 +651,6 @@ class laneDetector:
 
         myIpm = ipm(conf)
 
-#        cv2.imshow('street', img);
-#        cv2.waitKey(0);
-#        cv2.destroyAllWindows();
         myIpm.getVanishingPoint()
         self.logger.info('Vanishing point: (%.2f, %.2f)', myIpm.vp[0], myIpm.vp[1])
         myIpm.getROI()
@@ -567,7 +703,7 @@ def main():
     myLines = detector.lines(outImgThresholded)
     for _line in myLines:
         __line = _line.getCartesian()
-        cv2.line(outImgThresholded, tuple(round(_) for _ in __line[0]), tuple(round(_) for _ in __line[1]), (255, 0, 0), 1)
+        cv2.line(outImgThresholded, tuple(round(float(_)) for _ in __line[0]), tuple(round(float(_)) for _ in __line[1]), (255, 0, 0), 1)
 
     cv2.imshow('IPM vertical lines', outImgThresholded);
     cv2.waitKey(0);
