@@ -476,7 +476,7 @@ class lines:
         gLines = _lines[:]
         minD = self.conf['minDistance']
         i = 0
-        while len(gLines) > 1:
+        while len(gLines) > 1 and i < len(gLines) - 1:
             oA = np.asarray(gLines[i].getOrigin())
             oB = np.asarray(gLines[i+1].getOrigin())
             oD = oB - oA
@@ -493,8 +493,6 @@ class lines:
                 del gLines[i+1]
             else:
                 i += 1
-                if i == len(gLines) - 1:
-                    break
         return gLines
 
     def customCompute(self, imgIn, lineType = 'vertical'):
@@ -545,7 +543,6 @@ class lines:
                             [1,  1, 1]
                     ]
                 )
-
             y = np.float32([imgVector[max(0, index - 1)], val, imgVector[min(len(imgVector) - 1, index)]])
             _, a = cv2.solve(x, y, flags = cv2.DECOMP_SVD)
             indexSub = float((-0.5 * a[1]/a[0]) + index)
