@@ -533,7 +533,11 @@ class lines:
                 localMax.append((i, val))
 
         if len(localMax) == 0:
-            localMax.append((maxLoc, maxVal))
+            if maxLoc[1] == 0:
+                #No line
+                self.logger.error("No line detected")
+                return []
+            localMax.append((maxLoc[1], maxVal))
 
         # Subpixel
         for (index, val) in localMax:
