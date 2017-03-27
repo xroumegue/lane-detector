@@ -482,7 +482,7 @@ class lines:
             oD = oB - oA
             d = np.linalg.norm(oD)
             if d < minD:
-                # TODO/FIXME: Should we determine the new pow 'score weightly' 
+                # TODO/FIXME: Should we determine the new pow 'score weightly'
                 o = oA + oD/2
                 p = np.linalg.norm(o)
                 t = math.atan2(o[1], o[0])
@@ -671,8 +671,7 @@ def main():
 
     detector.logger.setLevel(args.verbose)
 
-    if not args.image:
-        print("I need an image !!")
+    if not args.image or not os.path.isfile(args.image):
         parser.print_help()
         return
 
