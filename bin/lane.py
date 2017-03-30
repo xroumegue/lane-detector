@@ -1,8 +1,16 @@
 from argparse import ArgumentParser, FileType, Action, Namespace
-import os
+from os import listdir
+from os.path import isfile, dirname, realpath, join
+from sys import path
 import logging
-import laneDetector
 import cv2
+
+customLibPath=join(dirname(realpath(__file__)),'../lib/python')
+for _dir in listdir(customLibPath):
+    path.append(dirname(realpath(join(customLibPath, _dir))))
+
+
+import laneDetector
 
 def parse_cmdline(parser):
 	parser.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG, default=logging.INFO, help='Be verbose...')
@@ -20,7 +28,7 @@ def main():
 
     detector.logger.setLevel(args.verbose)
 
-    if not args.image or not os.path.isfile(args.image):
+    if not args.image or not isfile(args.image):
         parser.print_help()
         return
 
