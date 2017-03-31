@@ -10,14 +10,14 @@ import math;
 
 class line:
     """ A class describing a line(https://en.wikipedia.org/wiki/Line_(geometry)) in a image """
-    def __init__(self, ptsPolar, score = None, box = None):
+    def __init__(self, ptsPolar, score = None, imageBox = None):
         self.logger = logging.getLogger(laneDetector.DETECTOR_LOGGER_NAME)
         self.pts = None
         self.r = None
         self.theta = None
         self.origin = None
         self.score = score if score is not None else None
-        self.box = box if box is not None else None
+        self.imageBox = imageBox if imageBox is not None else None
 
 #       slope = np.tan(self.theta)
 #       intercept = self.r / np.sin(self.theta)
@@ -41,8 +41,11 @@ class line:
         elif len(ptsPolar) == 2:
             self.pts = ptsPolar
 
-    def setBox(self, box):
-        self.box = box
+    def setImageBox(self, box):
+        self.imageBox = box
+
+    def getImageBox(self):
+        return self.imageBox
 
     def setScore(self, score):
         self.score = score
@@ -80,6 +83,27 @@ class line:
 
         return self.origin
 
+    def _computeBox(self):
+        minX = min(self.pts[0][0], self.pts[1][0])
+        maxX = max(self.pts[0][0], self.pts[1][0])
+        minY = min(self.pts[0][1], self.pts[1][1])
+        maxY = max(self.pts[0][1], self.pts[1][1])
+
+        if minX != maxX and minY != maxY:
+            pass
+        elif minX == maxX:
+            if minX != self.getImageBox()[0][0]:
+                minX -= 1
+            else:
+                maxX += 1
+        else:
+            if minY != self.getImageBox()[0][1]:
+                minY -= 1
+            else:
+                maxY += 1
+
+        self.box = [(minX, minY), (maxX, maxY)]
+
     def _getCartesian(self):
         if self.pts is not None:
             return self.pts
@@ -89,16 +113,16 @@ class line:
 
         if self.theta == math.pi or self.theta == 0:
             # vertical lines
-            pts = [(self.r, self.box[0][1]), (self.r, self.box[1][1])]
+            pts = [(self.r, self.imageBox[0][1]), (self.r, self.imageBox[1][1])]
         elif self.theta == math.pi/2 or self.theta == -math.pi/2:
             # Horizontal lines
-            pts = [(self.box[0][0], self.r), (self.box[1][0], self.r)]
+            pts = [(self.imageBox[0][0], self.r), (self.imageBox[1][0], self.r)]
         else:
             # General case
             # r = x * cos(theta) + y * sin(theta)
             o = self.getOrigin()
-            y = [self.box[0][1], self.box[1][1]].sort()
-            x = [self.box[0][0], self.box[1][0]].sort()
+            y = [self.imageBox[0][1], self.imageBox[1][1]].sort()
+            x = [self.imageBox[0][0], self.imageBox[1][0]].sort()
 
             if not ((y[1] >= o[1] >= y[0]) and (x[1] >= o[0] >= x[0])):
                 self.logger.error('Origin point {} not in box ({} {})'.format(o, x, y))
@@ -117,15 +141,17 @@ class line:
                     pts.append(_)
 
         self.pts = pts
+        self._computeBox()
+
         return self.pts
 
-    def getCartesian(self, box = None):
+    def getCartesian(self, imageBox = None):
         if self.pts is None:
-            if box is None and self.box is None:
+            if imageBox is None and self.imageBox is None:
                 self.logger.error("A box must be specified")
                 return
-            if box is not None:
-                self.setBox(box)
+            if imageBox is not None:
+                self.setImageBox(imageBox)
             self._getCartesian()
 
         return self.pts
@@ -181,7 +207,7 @@ class lines:
                 score = (gLines[i].getScore() + gLines[i+1].getScore()) / 2
                 self.logger.debug("Grouping line {} with {} to {}".format(
                                 gLines[i].getPolar(), gLines[i+1].getPolar(), (p, t)))
-                gLines[i] = line([(p, t)], score, box = self.conf['box'])
+                gLines[i] = line([(p, t)], score, imageBox = self.conf['imageBox'])
                 del gLines[i+1]
             else:
                 i += 1
@@ -247,7 +273,7 @@ class lines:
             elif lineType == 'vertical':
                 myLine = [(indexSub + 0.5, 0.5), (indexSub + 0.5, imgIn.shape[0] - 0.5)]
 
-            lines.append(line(myLine, imgVector[index], box = self.conf['box']))
+            lines.append(line(myLine, imgVector[index], imageBox = self.conf['imageBox']))
 
         for _line in lines:
             self.logger.debug("%s lines detected: %s", lineType, _line.getCartesian())

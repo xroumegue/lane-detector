@@ -72,10 +72,24 @@ class laneDetector:
 
         conf['threshold'] = self.config.getfloat('lines', 'threshold')
         conf['minDistance'] = self.config.getfloat('lines', 'minDistance')
-        conf['box'] = [(0, 0), (img.shape[1] - 1, img.shape[0] - 1)]
+        conf['imageBox'] = [(0, 0), (img.shape[1] - 1, img.shape[0] - 1)]
 
         self.lines = lines(conf)
         return self.lines.compute(img)
+
+    def ransac(self, img, lines):
+        conf = {}
+        if not self.config.has_section('ransac'):
+            self.logger.error('No ransac configuration found')
+            return
+
+        for (k, v) in self.config.items('ransac'):
+            conf[k] = v
+
+        self.ransac = ransac(conf)
+        ransacLines = self.ransac.compute(img, lines)
+
+        return ransacLines
 
     def getIPM(self, _file):
         conf = {}
