@@ -1,6 +1,7 @@
 import numpy
 import scipy # use numpy if scipy unavailable
 import scipy.linalg # use numpy if scipy unavailable
+import cv2
 
 ## Copyright (c) 2004-2007, Andrew D. Straw. All rights reserved.
 
@@ -127,11 +128,13 @@ class LinearLeastSquaresModel:
         self.input_columns = input_columns
         self.output_columns = output_columns
         self.debug = debug
+
     def fit(self, data):
         A = numpy.vstack([data[:,i] for i in self.input_columns]).T
         B = numpy.vstack([data[:,i] for i in self.output_columns]).T
         x,resids,rank,s = scipy.linalg.lstsq(A,B)
         return x
+
     def get_error( self, data, model):
         A = numpy.vstack([data[:,i] for i in self.input_columns]).T
         B = numpy.vstack([data[:,i] for i in self.output_columns]).T
@@ -139,7 +142,31 @@ class LinearLeastSquaresModel:
         err_per_point = numpy.sum((B-B_fit)**2,axis=1) # sum squared error per row
         return err_per_point
 
-def test():
+class svdModel:
+    def __init__(self,input_columns,output_columns,debug=False):
+        self.input_columns = input_columns
+        self.output_columns = output_columns
+        self.debug = debug
+
+    def fit(self, data):
+        A = numpy.vstack([data[:,i] for i in self.input_columns]).T
+        B = numpy.vstack([data[:,i] for i in self.output_columns]).T
+        ret, x = cv2.solve(A, B, flags= cv2.DECOMP_SVD)
+        return x
+
+    def get_error(self, data, model):
+        A = numpy.vstack([data[:,i] for i in self.input_columns]).T
+        B = numpy.vstack([data[:,i] for i in self.output_columns]).T
+        B_fit = scipy.dot(A,model)
+        err_per_point = numpy.sum((B-B_fit)**2,axis=1) # sum squared error per row
+        return err_per_point
+
+from enum import Enum
+class ransacModel(Enum):
+    LSTSQ = 1
+    SVD = 2
+
+def test(fitModel = ransacModel.LSTSQ):
     # generate perfect input data
 
     n_samples = 500
@@ -170,7 +197,18 @@ def test():
     input_columns = range(n_inputs) # the first columns of the array
     output_columns = [n_inputs+i for i in range(n_outputs)] # the last columns of the array
     debug = False
-    model = LinearLeastSquaresModel(input_columns,output_columns,debug=debug)
+
+    createModel = LinearLeastSquaresModel
+    if fitModel == ransacModel.LSTSQ:
+        print('Using Least Square Model')
+        createModel = LinearLeastSquaresModel
+    elif fitModel == ransacModel.SVD:
+        print('Using Single Value Decomposition')
+        createModel = svdModel
+    else:
+        print('Using Least Square Model by default')
+
+    model = createModel(input_columns,output_columns,debug=debug)
 
     linear_fit,resids,rank,s = scipy.linalg.lstsq(all_data[:,input_columns],
                                                   all_data[:,output_columns])
@@ -202,6 +240,12 @@ def test():
                     label='linear fit' )
         pylab.legend()
         pylab.show()
+
+def testLSTSQ():
+    test(ransacModel.LSTSQ)
+
+def testSVD():
+    test(ransacModel.SVD)
 
 if __name__=='__main__':
     test()
