@@ -39,18 +39,21 @@ def main():
     detector.readConf(args.camera)
     detector.readConf(args.lanes)
 
+    # Load Image
+    detector.load(args.image)
+    detector.showImage('original', detector.rawImage)
     # IPM
-    outImg = detector.getIPM(args.image)
-    cv2.imwrite("IPM-out.jpg", outImg)
-    cv2.imshow('IPM', outImg);
+    outImg = detector.getIPM(useRaw = False)
+#    cv2.imwrite("IPM-out.jpg", outImg)
+    detector.showImage('IPM', outImg)
 
     # Filter out "noise"
     outImgFiltered = detector.filter(outImg)
-    cv2.imshow('IPM Filtered', outImgFiltered);
+    detector.showImage('IPM Filtered', outImgFiltered);
 
     # Threshold
     outImgThresholded = detector.threshold(outImg)
-    cv2.imshow('IPM Thresholded', outImgThresholded);
+    detector.showImage('IPM Thresholded', outImgThresholded);
 
     # Detecting lines
     myLines = detector.lines(outImgThresholded)
@@ -58,11 +61,11 @@ def main():
         __line = _line.getCartesian()
         cv2.line(outImgThresholded, tuple(round(float(_)) for _ in __line[0]), tuple(round(float(_)) for _ in __line[1]), (255, 0, 0), 1)
 
-
-    detector.ransac(outImgThresholded, myLines)
-    cv2.imshow('IPM vertical lines', outImgThresholded);
+    detector.showImage('IPM vertical lines', outImgThresholded);
     cv2.waitKey(0);
     cv2.destroyAllWindows();
+
+    detector.ransac(outImgThresholded, myLines)
 
 if __name__ == '__main__':
     main()
