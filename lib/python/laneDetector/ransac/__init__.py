@@ -31,6 +31,7 @@ class ransac:
         k = int(self.conf['iterations']) if 'iterations' in self.conf.keys() else RANSAC_LINE_DEFAULT_ITERATIONS
         t = float(self.conf['threshold']) if 'threshold' in self.conf.keys() else RANSAC_LINE_DEFAULT_THRESHOLD
         d = int(self.conf['good']) if 'good' in self.conf.keys() else RANSAC_LINE_DEFAULT_GOOD
+        debug = (self.conf['debug'] == '1') if 'debug' in self.conf.keys() else False
 
         self.logger.debug('Ransac using %s method, (w,n,k,t,d): (%s, %s, %s, %s, %s)', method, width, n, k, t, d)
 
@@ -55,9 +56,8 @@ class ransac:
             x = points[:,0]
             y = points[:,1]
             # Do Line Ransac estimation on subimage
-            debug = True
             model = getModel(ransacMethod)([0], [1], debug=debug)
-            ransac_fit, ransac_data = doRansac(points, model, n, k, t, d, debug = debug, return_all = True)
+            ransac_fit, ransac_data = doRansac(points, model, n, k, t, d, debug = debug, return_all = True, logger=self.logger)
 
 
 
