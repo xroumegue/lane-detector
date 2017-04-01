@@ -41,6 +41,29 @@ class line:
         elif len(ptsPolar) == 2:
             self.pts = ptsPolar
 
+    def getBoundingBox(self, width):
+        pts = self.getCartesian()
+        # Vertical line
+        if pts[0][0] == pts[1][0]:
+            return [(max(self.imageBox[0][0], pts[0][0] - width), pts[0][1]),
+                    (min(self.imageBox[1][0], pts[1][0] + width), pts[1][1])]
+        elif pts[0][1] == pts[1][1]:
+            return [(pts[0][0], max(self.imageBox[0][1], pts[0][1] - width)),
+                    (pts[1][0], min(self.imageBox[1][1], pts[1][1] + width))]
+        else:
+        # TODO
+            self.logger.error("General case of bounding box: untested, returning 4 points tuples")
+            a = (pts[1][0] - pts[0][0], pts[1][1] - pts[0][1])
+            l_a = math.sqrt(a[0]*a[0] + a[1]*a[1])
+            by = a[0] * width/l_a
+            bx = math.sqrt((width * width) - (by*by))
+            return [(min(pts[0][0], pts[1][0]) - bx,min(pts[0][1],pts[1][1]) - by),
+                    (min(pts[0][0], pts[1][0]) + bx,min(pts[0][1],pts[1][1]) + by),
+                    (max(pts[0][0], pts[1][0]) - bx,max(pts[0][1],pts[1][1]) - by),
+                    (max(pts[0][0], pts[1][0]) + bx,max(pts[0][1],pts[1][1]) + by)]
+
+
+
     def setImageBox(self, box):
         self.imageBox = box
 

@@ -1,6 +1,7 @@
 import logging
 import configparser
 import numpy as np
+import cv2
 from os.path import isfile
 from laneDetector import *
 from laneDetector.ipm import ipm
@@ -28,6 +29,32 @@ class laneDetector:
         # create logger
         logging.basicConfig(format=FORMAT)
         self.logger = logging.getLogger(DETECTOR_LOGGER_NAME)
+        self.rawImage = None
+        self.scaleImage = None
+
+    def scale(self, img):
+        if img.dtype == np.uint8:
+            _img = np.float32(img / np.iinfo(img.dtype).max)
+        else:
+            if self.rawImage is not None:
+                _scale = np.iinfo(self.rawImage.dtype).max
+            else:
+                _scale = 255
+            _img = cv2.convertScaleAbs(img, alpha = _scale)
+
+        return _img
+
+    def load(self, _file):
+        self.rawImage = cv2.imread(_file, cv2.IMREAD_GRAYSCALE)
+        self.scaleImage = self.scale(self.rawImage)
+
+    def showImage(self, title, img):
+        if img.dtype == np.uint8:
+            _img = img
+        else:
+            _img = self.scale(img)
+
+        cv2.imshow(title, _img)
 
     def readConf(self, _file):
         if isfile(_file):
@@ -92,7 +119,7 @@ class laneDetector:
 
         return ransacLines
 
-    def getIPM(self, _file):
+    def getIPM(self, useRaw=False):
         conf = {}
         conf['yaw'] = self.config.getfloat('camera', 'yaw') * np.pi / 180
         conf['pitch'] = self.config.getfloat('camera', 'pitch') * np.pi / 180
@@ -119,8 +146,8 @@ class laneDetector:
         myIpm.getVanishingPoint()
         self.logger.info('Vanishing point: (%.2f, %.2f)', myIpm.vp[0], myIpm.vp[1])
         myIpm.getROI()
-        myIpm.load(_file)
-        outImg = myIpm.compute()
+        _img = self.scaleImage if useRaw is False else self.rawImage
+        outImg = myIpm.compute(_img)
         return outImg
 
 

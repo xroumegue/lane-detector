@@ -2,7 +2,6 @@ import logging
 import numpy as np
 import math
 import laneDetector
-import cv2
 
 def interpolation(array,x,y):
     s = array.shape
@@ -165,10 +164,7 @@ class ipm:
     def getROI(self):
         return self.roi
 
-    def load(self, _file):
-        self.img = cv2.imread(_file, cv2.IMREAD_GRAYSCALE)
-
-    def compute(self):
+    def compute(self, img):
         width = self.conf['ipmWidth']
         height = self.conf['ipmHeight']
         right = self.conf['ipmRight']
@@ -176,7 +172,7 @@ class ipm:
         top = self.conf['ipmTop']
         bottom = self.conf['ipmBottom']
 
-        out = np.zeros([height, width], dtype= np.uint8)
+        out = np.array(np.zeros([height, width]), dtype= img.dtype)
         self.out = out
 
         wOut = np.zeros([height,width, 2], dtype=np.float32)
@@ -196,10 +192,10 @@ class ipm:
                 if left <= xPos <= right and top <= yPos <= bottom:
                     if self.conf['ipmInterpolation'] == 0:
                         #bilinear interpolation
-                        out[y, x] = interpolation(self.img, xPos, yPos)
+                        out[y, x] = interpolation(img, xPos, yPos)
                     else:
                         # Nearest Neighbour
-                        out[y, x] = self.img[yPos.astype(int), xPos.astype(int)]
+                        out[y, x] = img[yPos.astype(int), xPos.astype(int)]
                 else:
                    out[y, x] =  0
 

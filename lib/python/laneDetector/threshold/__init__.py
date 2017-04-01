@@ -21,7 +21,11 @@ class threshold:
             self.logger.error('No threshold method solution, fallback to binary')
             method = 'binary'
 
-        maxValue = np.iinfo(imgIn.dtype).max
+        if np.issubdtype(imgIn.dtype, int):
+            maxValue = np.iinfo(imgIn.dtype).max
+        else:
+            maxValue = 1.0
+
         thresholdValue =  np.percentile(imgIn, self.conf['value'])
         self.logger.debug('Percentile value: %.2f, threshold value: %.2f',
                                             thresholdValue, self.conf['value'])
