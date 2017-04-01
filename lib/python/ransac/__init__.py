@@ -33,7 +33,7 @@ import cv2
 ## (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 ## OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-def ransac(data,model,n,k,t,d,debug=False,return_all=False):
+def doRansac(data,model,n,k,t,d,debug=False,return_all=False):
     """fit model parameters to data using the RANSAC algorithm
 
 This implementation written from pseudocode found at
@@ -166,6 +166,15 @@ class ransacModel(Enum):
     LSTSQ = 1
     SVD = 2
 
+def getModel(fitModel):
+    _model = LinearLeastSquaresModel
+    if fitModel == ransacModel.LSTSQ:
+        _model = LinearLeastSquaresModel
+    elif fitModel == ransacModel.SVD:
+        _model = svdModel
+
+    return _model
+
 def test(fitModel = ransacModel.LSTSQ):
     # generate perfect input data
 
@@ -214,7 +223,7 @@ def test(fitModel = ransacModel.LSTSQ):
                                                   all_data[:,output_columns])
 
     # run RANSAC algorithm
-    ransac_fit, ransac_data = ransac(all_data,model,
+    ransac_fit, ransac_data = doRansac(all_data,model,
                                      50, 1000, 7e3, 300, # misc. parameters
                                      debug=debug,return_all=True)
     if 1:
