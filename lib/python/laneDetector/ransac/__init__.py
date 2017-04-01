@@ -24,4 +24,4 @@ class ransac:
         self.logger.debug('Ransac using %s method', method)
 
 
-        return imgOut
+        return imgIn

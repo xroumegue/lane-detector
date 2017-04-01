@@ -7,9 +7,10 @@ from laneDetector.ipm import ipm
 from laneDetector.filters import filter
 from laneDetector.lines import lines
 from laneDetector.threshold import threshold
+from laneDetector.ransac import ransac
 
 __all__ = ['DETECTOR_LOGGER_NAME', 'ipm', 'filters', 'threshold', 'lines',
-        'laneDetector']
+        'laneDetector', 'ransac']
 
 __author__  = "Xavier Roumegue <xroumegue.gmail.com>"
 __status__  = "prototyping"

@@ -58,6 +58,8 @@ def main():
         __line = _line.getCartesian()
         cv2.line(outImgThresholded, tuple(round(float(_)) for _ in __line[0]), tuple(round(float(_)) for _ in __line[1]), (255, 0, 0), 1)
 
+
+    detector.ransac(outImgThresholded, myLines)
     cv2.imshow('IPM vertical lines', outImgThresholded);
     cv2.waitKey(0);
     cv2.destroyAllWindows();
