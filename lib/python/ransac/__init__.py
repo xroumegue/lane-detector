@@ -2,6 +2,7 @@ import numpy
 import scipy # use numpy if scipy unavailable
 import scipy.linalg # use numpy if scipy unavailable
 import cv2
+import logging
 
 ## Copyright (c) 2004-2007, Andrew D. Straw. All rights reserved.
 
@@ -33,7 +34,7 @@ import cv2
 ## (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 ## OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-def doRansac(data,model,n,k,t,d,debug=False,return_all=False):
+def doRansac(data,model,n,k,t,d,debug=False,return_all=False, logger= None):
     """fit model parameters to data using the RANSAC algorithm
 
 This implementation written from pseudocode found at
@@ -75,6 +76,8 @@ while iterations < k {
 return bestfit
 }}}
 """
+    if logger is None:
+        logger = logging.getLogger('ransac')
     iterations = 0
     bestfit = None
     besterr = numpy.inf
@@ -88,10 +91,10 @@ return bestfit
         also_idxs = test_idxs[test_err < t] # select indices of rows with accepted points
         alsoinliers = data[also_idxs,:]
         if debug:
-            print('test_err.min() %f \n', test_err.min())
-            print('test_err.max() %f \n',test_err.max())
-            print('numpy.mean(test_err) %f\n',numpy.mean(test_err))
-            print('iteration %d:len(alsoinliers) = %d', iterations,len(alsoinliers))
+            logger.debug('test_err.min() %f \n', test_err.min())
+            logger.debug('test_err.max() %f \n',test_err.max())
+            logger.debug('numpy.mean(test_err) %f\n',numpy.mean(test_err))
+            logger.debug('iteration %d:len(alsoinliers) = %d', iterations,len(alsoinliers))
         if len(alsoinliers) > d:
             betterdata = numpy.concatenate( (maybeinliers, alsoinliers) )
             bettermodel = model.fit(betterdata)
