@@ -48,17 +48,14 @@ class ransac:
             box = [int(i[j]) for i in _line.getBoundingBox(int(width)) for j in range(len(i))]
             box = list(zip(box[0::2], box[1::2]))
             # Extract subimage : ROI of image acccording to box
-            subImage = imgIn[box[0][0]:box[1][0], box[0][1]:box[1][1]]
+            subImage = np.array(np.zeros(imgIn.shape), dtype=imgIn.dtype)
+            subImage[box[0][0]:box[1][0], box[0][1]:box[1][1]] = imgIn[box[0][0]:box[1][0], box[0][1]:box[1][1]]
             # Get non zero point only
             # Using numpy, but opencv2.findNonZero(img) could be used ( would required uint8)
             points = np.transpose(np.nonzero(subImage)).astype(np.float)
-            print(points.shape)
-            x = points[:,0]
-            y = points[:,1]
             # Do Line Ransac estimation on subimage
             model = getModel(ransacMethod)([0], [1], debug=debug)
             ransac_fit, ransac_data = doRansac(points, model, n, k, t, d, debug = debug, return_all = True, logger=self.logger)
-
 
 
         return imgIn
