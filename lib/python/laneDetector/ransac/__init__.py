@@ -7,6 +7,7 @@ import cv2;
 import math;
 import laneDetector
 from ransac import ransacModel, getModel, doRansac
+from laneDetector.lines import line
 
 RANSAC_LINE_DEFAULT_BOUNDING_BOX_WIDTH = 20
 RANSAC_LINE_DEFAULT_SAMPLES = 5
@@ -14,13 +15,56 @@ RANSAC_LINE_DEFAULT_ITERATIONS = 50
 RANSAC_LINE_DEFAULT_THRESHOLD = 0.3
 RANSAC_LINE_DEFAULT_GOOD = 10
 
+class npSvdModel:
+    def __init__(self,input_columns,output_columns,debug=False):
+        self.input_columns = input_columns
+        self.output_columns = output_columns
+        self.debug = debug
+
+    def fit(self, data):
+        A = np.vstack([data[:,i] for i in self.input_columns]).T
+        B = np.vstack([data[:,i] for i in self.output_columns]).T
+        mean = np.mean(data, axis = 0)
+        dataNorm = data - mean
+        u, s, v = np.linalg.svd(dataNorm, full_matrices=1, compute_uv=1)
+
+        # return the estimated line in the form: ax + by + c = 0
+        a = v[0,1]
+        b = v[1,1]
+        c = -(mean[0] * a + mean[1] * b)
+#        print(a, b, c)
+        return (a, b , c)
+
+    def get_error(self, data, model):
+        a, b, c = model
+        # Handle special case
+        if a == 0:
+            # Horizontal lane
+            x = np.vstack([data[:,i] for i in self.input_columns]).T
+            y = np.vstack([data[:,i] for i in self.output_columns]).T
+            y_fit = np.ones(y.shape) * (c/b)
+            pass
+        elif b == 0:
+            # Vertical lane
+            y = np.vstack([data[:,i] for i in self.input_columns]).T
+            x = np.vstack([data[:,i] for i in self.output_columns]).T
+            y_fit = np.ones(y.shape) * (-c/a)
+        else:
+            #Neither horizontal, Nor vertical
+            x = np.vstack([data[:,i] for i in self.input_columns]).T
+            y = np.vstack([data[:,i] for i in self.output_columns]).T
+            y_fit = - (c + np.dot(x, a))/b
+
+        err_per_point = np.sum((y-y_fit)**2,axis=1) # sum squared error per row
+        return err_per_point
+
 class ransac:
     """A class thresholding the image """
     def __init__(self, conf):
         self.logger = logging.getLogger(laneDetector.DETECTOR_LOGGER_NAME)
         self.conf = conf
 
-    def compute(self, imgIn, lines):
+    def compute(self, imgIn, _lines):
         if 'method' in self.conf.keys():
             method = self.conf['method']
         else:
@@ -37,13 +81,12 @@ class ransac:
 
         if method == 'svd':
             ransacMethod = ransacModel.SVD
-        elif method == 'lstsq':
-            ransacMethod = ransacModel.LSTSQ
         else:
+            self.logger.error('Only SVD method supported')
             ransacMethod = ransacModel.SVD
 
-
-        for _line in lines:
+        ransac_lines = []
+        for _line in _lines:
             # Get bounding box coordinates
             box = [int(i[j]) for i in _line.getBoundingBox(int(width)) for j in range(len(i))]
             box = list(zip(box[0::2], box[1::2]))
@@ -54,8 +97,9 @@ class ransac:
             # Using numpy, but opencv2.findNonZero(img) could be used ( would required uint8)
             points = np.transpose(np.nonzero(subImage)).astype(np.float)
             # Do Line Ransac estimation on subimage
-            model = getModel(ransacMethod)([0], [1], debug=debug)
+            model = npSvdModel([0], [1], debug=debug)
             ransac_fit, ransac_data = doRansac(points, model, n, k, t, d, debug = debug, return_all = True, logger=self.logger)
+            self.logger.debug("Line standard equation: ax + by + c = 0: %s", ransac_fit);
+            ransac_lines.append(line([ransac_fit], imageBox = [(0, 0), (imgIn.shape[1] - 1, imgIn.shape[0] - 1)]))
 
-
-        return imgIn
+        return ransac_lines
