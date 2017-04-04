@@ -56,6 +56,13 @@ class laneDetector:
 
         cv2.imshow(title, _img)
 
+    def showLines(self, title, img, _lines):
+        for _line in _lines:
+            __line = _line.getCartesian()
+            cv2.line(img, tuple(round(float(_)) for _ in __line[0]), tuple(round(float(_)) for _ in __line[1]), (255, 0, 0), 1)
+
+        self.showImage(title, img);
+
     def readConf(self, _file):
         if isfile(_file):
             self.config.read(_file)
@@ -116,6 +123,8 @@ class laneDetector:
 
         self.ransac = ransac(conf)
         ransacLines = self.ransac.compute(img, lines)
+        for _line in ransacLines:
+            _line.setImageBox([(0, 0), (img.shape[1] - 1, img.shape[0] - 1)])
 
         return ransacLines
 
