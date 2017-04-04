@@ -57,15 +57,13 @@ def main():
 
     # Detecting lines
     myLines = detector.lines(outImgThresholded)
-    for _line in myLines:
-        __line = _line.getCartesian()
-        cv2.line(outImgThresholded, tuple(round(float(_)) for _ in __line[0]), tuple(round(float(_)) for _ in __line[1]), (255, 0, 0), 1)
+    detector.showLines('IPM vertical lines', outImgThresholded, myLines)
 
-    detector.showImage('IPM vertical lines', outImgThresholded);
+    ransacLines = detector.ransac(outImgThresholded, myLines)
+    detector.showLines('IPM Ransac lines', outImgThresholded, ransacLines)
+
     cv2.waitKey(0);
     cv2.destroyAllWindows();
-
-    detector.ransac(outImgThresholded, myLines)
 
 if __name__ == '__main__':
     main()
