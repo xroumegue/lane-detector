@@ -41,14 +41,47 @@ class line:
             elif len(ptsPolar[0]) == 3:
                 """ ax + by + c = 0"""
                 a, b, c = ptsPolar[0]
-                inv_angle = math.sqrt(a*a + b*b)
+                norm_scale = math.sqrt(a*a + b*b)
                 if c > 0:
-                    inv_angle = -inv_angle
-                self.r = math.fabs(c / inv_angle)
-                x_angle = math.acos(a/inv_angle)
-                y_angle = math.asin(b/inv_angle)
+                    norm_scale = -norm_scale
+                self.r = math.fabs(c / norm_scale)
+                a_norm = a / norm_scale
+                b_norm = b / norm_scale
+                x_angle = math.acos(a_norm)
+                if x_angle < 0:
+                    x_angle += 2 * math.pi
+                y_angle = math.asin(b_norm)
+                if y_angle < 0:
+                    y_angle += 2 * math.pi
                 z_angle = math.atan2(b, a)
-                self.theta = z_angle
+                if z_angle < 0:
+                    z_angle += 2 * math.pi
+                if x_angle == y_angle == z_angle:
+                    self.theta = z_angle
+                else:
+                    if a_norm > 0:
+                        if b_norm > 0:
+                            # Q1
+                            theta_min = 0
+                            theta_max = math.pi/2
+                        else:
+                            # Q4
+                            theta_min = 3 * math.pi/2
+                            theta_max = 2 * math.pi
+                    else:
+                        if b_norm > 0:
+                            # Q2
+                            theta_min = math.pi/2
+                            theta_max = math.pi
+                        else:
+                            # Q3
+                            theta_min = math.pi
+                            theta_max = 3 * math.pi/2
+                    for _ in [x_angle, y_angle, z_angle]:
+                        if theta_max > _ > theta_min:
+                            self.theta = _
+                            break
+
         elif len(ptsPolar) == 2:
             self.pts = ptsPolar
 
