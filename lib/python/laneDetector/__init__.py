@@ -56,7 +56,9 @@ class laneDetector:
 
         cv2.imshow(title, _img)
 
-    def showLines(self, title, img, _lines):
+    def showLines(self, title, _img, _lines):
+        img = np.array(np.empty(_img.shape, dtype=_img.dtype))
+        np.copyto(img, _img)
         for _line in _lines:
             __line = _line.getCartesian()
             cv2.line(img, tuple(round(float(_)) for _ in __line[0]), tuple(round(float(_)) for _ in __line[1]), (255, 0, 0), 1)
