@@ -193,9 +193,6 @@ class line:
             y = sorted([self.imageBox[0][1], self.imageBox[1][1]])
             x = sorted([self.imageBox[0][0], self.imageBox[1][0]])
 
-            if not ((y[1] >= o[1] >= y[0]) and (x[1] >= o[0] >= x[0])):
-                self.logger.error('Origin point {} not in box ({} {})'.format(o, x, y))
-                return None
             r = self.r
             t = self.theta
             sol = [
