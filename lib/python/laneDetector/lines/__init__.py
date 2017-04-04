@@ -34,12 +34,25 @@ class line:
             self.logger.error("Must have at most 2 tuples")
             return
 
-
         if len(ptsPolar) == 1:
-            self.r = ptsPolar[0][0]
-            self.theta = ptsPolar[0][1]
+            if len(ptsPolar[0]) == 2:
+                self.r = ptsPolar[0][0]
+                self.theta = ptsPolar[0][1]
+            elif len(ptsPolar[0]) == 3:
+                """ ax + by + c = 0"""
+                a, b, c = ptsPolar[0]
+                inv_angle = math.sqrt(a*a + b*b)
+                if c > 0:
+                    inv_angle = -inv_angle
+                self.r = math.fabs(c / inv_angle)
+                x_angle = math.acos(a/inv_angle)
+                y_angle = math.asin(b/inv_angle)
+                z_angle = math.atan2(b, a)
+                self.theta = z_angle
         elif len(ptsPolar) == 2:
             self.pts = ptsPolar
+
+        self.logger.debug("Line created: r(%s) theta(%s), pts(%s), Score(%s), ImageBox(%s)", self.r, self.theta, self.pts, self.score, self.imageBox)
 
     def getBoundingBox(self, width):
         pts = self.getCartesian()
@@ -144,8 +157,8 @@ class line:
             # General case
             # r = x * cos(theta) + y * sin(theta)
             o = self.getOrigin()
-            y = [self.imageBox[0][1], self.imageBox[1][1]].sort()
-            x = [self.imageBox[0][0], self.imageBox[1][0]].sort()
+            y = sorted([self.imageBox[0][1], self.imageBox[1][1]])
+            x = sorted([self.imageBox[0][0], self.imageBox[1][0]])
 
             if not ((y[1] >= o[1] >= y[0]) and (x[1] >= o[0] >= x[0])):
                 self.logger.error('Origin point {} not in box ({} {})'.format(o, x, y))
