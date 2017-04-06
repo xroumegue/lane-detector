@@ -41,25 +41,36 @@ def main():
 
     # Load Image
     detector.load(args.image)
+    detector.logger.debug('Original Image energy: %f \n', detector.getEnergy(detector.scaleImage))
     detector.showImage('original', detector.rawImage)
+
     # IPM
     outImg = detector.getIPM(useRaw = False)
+    # IPM debug
 #    cv2.imwrite("IPM-out.jpg", outImg)
     detector.showImage('IPM', outImg)
+    detector.logger.debug('IPM Image energy: %f', detector.getEnergy(outImg))
 
     # Filter out "noise"
     outImgFiltered = detector.filter(outImg)
+    # Filter debug
+    detector.logger.debug('Filtered Image energy: %f', detector.getEnergy(outImgFiltered))
     detector.showImage('IPM Filtered', outImgFiltered);
 
     # Threshold
     outImgThresholded = detector.threshold(outImgFiltered)
+    # Threshold debug
+    detector.logger.debug('Thresholded Image energy: %f', detector.getEnergy(outImgThresholded))
     detector.showImage('IPM Thresholded', outImgThresholded);
 
     # Detecting lines
     myLines = detector.lines(outImgThresholded)
+    # Detecting lines debug
     detector.showLines('IPM vertical lines', outImgThresholded, myLines)
 
+    # Ransac
     ransacLines = detector.ransac(outImgThresholded, myLines)
+    # RAnsac lines debug
     detector.showLines('IPM Ransac lines', outImgThresholded, ransacLines)
 
     cv2.waitKey(0);
