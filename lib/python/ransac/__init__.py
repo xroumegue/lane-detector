@@ -78,6 +78,8 @@ return bestfit
 """
     if logger is None:
         logger = logging.getLogger('ransac')
+    if len(data) == 0:
+        raise ValueError("Ransac data matrix is empty")
     iterations = 0
     bestfit = None
     besterr = numpy.inf
