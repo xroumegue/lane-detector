@@ -27,12 +27,14 @@ class threshold:
             maxValue = 1.0
 
         thresholdValue =  np.percentile(imgIn, self.conf['value'])
-        self.logger.debug('Percentile value: %.2f, threshold value: %.2f',
-                                            thresholdValue, self.conf['value'])
+
         if method == 'binary':
             cv2Method = cv2.THRESH_BINARY
         elif method == 'tozero':
             cv2Method = cv2.THRESH_TOZERO
+
+        self.logger.debug('Percentile value: %.2f, threshold value: %.2f, method: %s',
+                                            thresholdValue, self.conf['value'], method)
 
         ret, imgOut = cv2.threshold(imgIn, thresholdValue, maxValue, cv2Method)
 
