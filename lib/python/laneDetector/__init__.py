@@ -134,7 +134,7 @@ class laneDetector:
         conf = {}
         conf['yaw'] = self.config.getfloat('camera', 'yaw') * np.pi / 180
         conf['pitch'] = self.config.getfloat('camera', 'pitch') * np.pi / 180
-        conf['c1'] = np.cos(conf['yaw'])
+        conf['c1'] = np.cos(conf['pitch'])
         conf['s1'] = np.sin(conf['pitch'])
         conf['c2'] = np.cos(conf['yaw'])
         conf['s2'] = np.sin(conf['yaw'])
