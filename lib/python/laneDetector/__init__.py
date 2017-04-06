@@ -32,6 +32,9 @@ class laneDetector:
         self.rawImage = None
         self.scaleImage = None
 
+    def getEnergy(self, img):
+        return np.sum(img*img)
+
     def scale(self, img):
         if img.dtype == np.uint8:
             _img = np.float32(img / np.iinfo(img.dtype).max)
