@@ -64,7 +64,10 @@ class ipm:
         T = np.dot(Tpitch, Tyaw)
         T = T1.dot(T)
         vp = T.dot(vp)
-        self.logger.debug('Vanishing point coordinates: (%.3f, %.3f)', vp[0], vp[1])
+        self.logger.debug('Tyaw:\n%s)', Tyaw)
+        self.logger.debug('Tpitch:\n%s)', Tpitch)
+        self.logger.debug('T1:\n %s)', T1)
+        self.logger.info('Vanishing point coordinates: (%.3f, %.3f)', vp[0], vp[1])
 
         return vp
 
