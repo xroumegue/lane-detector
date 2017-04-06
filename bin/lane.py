@@ -52,7 +52,7 @@ def main():
     detector.showImage('IPM Filtered', outImgFiltered);
 
     # Threshold
-    outImgThresholded = detector.threshold(outImg)
+    outImgThresholded = detector.threshold(outImgFiltered)
     detector.showImage('IPM Thresholded', outImgThresholded);
 
     # Detecting lines
