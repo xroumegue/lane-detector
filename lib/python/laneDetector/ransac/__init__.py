@@ -37,26 +37,14 @@ class npSvdModel:
 
     def get_error(self, data, model):
         a, b, c = model
-        # Handle special case
-        if a == 0:
-            # Horizontal lane
-            x = np.vstack([data[:,i] for i in self.input_columns]).T
-            y = np.vstack([data[:,i] for i in self.output_columns]).T
-            y_fit = np.ones(y.shape) * (c/b)
-            pass
-        elif b == 0:
-            # Vertical lane
-            y = np.vstack([data[:,i] for i in self.input_columns]).T
-            x = np.vstack([data[:,i] for i in self.output_columns]).T
-            y_fit = np.ones(y.shape) * (-c/a)
-        else:
-            #Neither horizontal, Nor vertical
-            x = np.vstack([data[:,i] for i in self.input_columns]).T
-            y = np.vstack([data[:,i] for i in self.output_columns]).T
-            y_fit = - (c + np.dot(x, a))/b
 
-        err_per_point = np.sum((y-y_fit)**2,axis=1) # sum squared error per row
-        return err_per_point
+        poses = np.vstack((
+                            [data[:,i] for i in self.input_columns],
+                            [data[:,i] for i in self.output_columns],
+                            [np.ones(data.shape[0])]
+                        )).T
+        err = np.fabs(np.dot(poses, np.float32([a, b, c])))
+        return err
 
 class ransac:
     """A class thresholding the image """
