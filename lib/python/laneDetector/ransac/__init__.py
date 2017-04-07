@@ -5,25 +5,37 @@ import os
 import numpy as np;
 import cv2;
 import math;
+from itertools import accumulate
+from random import choices
 import laneDetector
 from ransac import ransacModel, getModel, doRansac
 from laneDetector.lines import line
+from sys import version_info
 
 RANSAC_LINE_DEFAULT_BOUNDING_BOX_WIDTH = 20
 RANSAC_LINE_DEFAULT_SAMPLES = 5
 RANSAC_LINE_DEFAULT_ITERATIONS = 50
 RANSAC_LINE_DEFAULT_THRESHOLD = 0.3
 RANSAC_LINE_DEFAULT_GOOD = 10
+if version_info.major < 3 and version_info.minor < 6:
+    raise ValueError("Need to run with python version >= 3.6.x")
 
 class npSvdModel:
-    def __init__(self,input_columns,output_columns,debug=False):
-        self.input_columns = input_columns
-        self.output_columns = output_columns
+    def __init__(self, x_col, y_col, data_col, debug=False):
+        self.x_column = x_col
+        self.y_column = y_col
+        self.data_column = data_col
         self.debug = debug
 
+
+    def random_partition(self, n, data):
+        all_idxs = np.arange(data.shape[0])
+        w = list(accumulate(data[:, self.data_column]))
+        idxs1 = np.asarray(choices(all_idxs, cum_weights=w, k = n))
+        idxs2 = np.asarray(list(set(all_idxs) - set(idxs1)))
+        return idxs1, idxs2
+
     def fit(self, data):
-        A = np.vstack([data[:,i] for i in self.input_columns]).T
-        B = np.vstack([data[:,i] for i in self.output_columns]).T
         mean = np.mean(data, axis = 0)
         dataNorm = data - mean
         u, s, v = np.linalg.svd(dataNorm, full_matrices=1, compute_uv=1)
@@ -39,8 +51,8 @@ class npSvdModel:
         a, b, c = model
 
         poses = np.vstack((
-                            [data[:,i] for i in self.input_columns],
-                            [data[:,i] for i in self.output_columns],
+                            data[:, self.x_column].tolist(),
+                            data[:, self.y_column].tolist(),
                             [np.ones(data.shape[0])]
                         )).T
         err = np.fabs(np.dot(poses, np.float32([a, b, c])))
@@ -83,9 +95,12 @@ class ransac:
             subImage[box[0][0]:box[1][0], box[0][1]:box[1][1]] = imgIn[box[0][0]:box[1][0], box[0][1]:box[1][1]]
             # Get non zero point only
             # Using numpy, but opencv2.findNonZero(img) could be used ( would required uint8)
-            points = np.transpose(np.nonzero(subImage)).astype(np.float)
+            nz = np.nonzero(subImage)
+            points = np.empty([len(nz[0]), 3], dtype=np.float32)
+            points[:,0:2] = np.transpose(nz).astype(np.float32)
+            points[:,2] = subImage[nz]
             # Do Line Ransac estimation on subimage
-            model = npSvdModel([0], [1], debug=debug)
+            model = npSvdModel(0, 1, 2, debug=debug)
             ransac_fit, ransac_data = doRansac(points, model, n, k, t, d, debug = debug, return_all = True, logger=self.logger)
             self.logger.debug("Line standard equation: ax + by + c = 0: %s", ransac_fit);
             ransac_lines.append(line([ransac_fit], imageBox = [(0, 0), (imgIn.shape[1] - 1, imgIn.shape[0] - 1)]))
