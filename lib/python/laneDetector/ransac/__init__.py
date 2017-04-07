@@ -96,6 +96,9 @@ class ransac:
             # Get non zero point only
             # Using numpy, but opencv2.findNonZero(img) could be used ( would required uint8)
             nz = np.nonzero(subImage)
+            if not len(nz[0]):
+                self.logger.error("Skipping this line - all pixels are nulls in box:", box)
+                continue
             points = np.empty([len(nz[0]), 3], dtype=np.float32)
             points[:,0:2] = np.transpose(nz).astype(np.float32)
             points[:,2] = subImage[nz]
