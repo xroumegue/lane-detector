@@ -87,8 +87,15 @@ return bestfit
     if n > data.shape[0]:
         n = data.shape[0]
 
+    try:
+        doRandom = model.random_partition
+        model.random_partition(n, data)
+    except AttributeError:
+        logger.debug('Using fallback random partition function')
+        doRandom = random_partition
+
     while iterations < k:
-        maybe_idxs, test_idxs = random_partition(n,data.shape[0])
+        maybe_idxs, test_idxs = doRandom(n, data)
         maybeinliers = data[maybe_idxs,:]
         test_points = data[test_idxs]
         maybemodel = model.fit(maybeinliers)
@@ -117,8 +124,9 @@ return bestfit
     else:
         return bestfit
 
-def random_partition(n,n_data):
+def random_partition(n, data):
     """return n random rows of data (and also the other len(data)-n rows)"""
+    n_data = data.shape[0]
     all_idxs = numpy.arange( n_data )
     numpy.random.shuffle(all_idxs)
     idxs1 = all_idxs[:n]
