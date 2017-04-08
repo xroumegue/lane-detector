@@ -21,21 +21,21 @@ if version_info.major < 3 and version_info.minor < 6:
     raise ValueError("Need to run with python version >= 3.6.x")
 
 class npSvdModel:
-    def __init__(self, x_col, y_col, data_col, debug=False):
-        self.x_column = x_col
-        self.y_column = y_col
-        self.data_column = data_col
+    def __init__(self, logger, debug=False):
         self.debug = debug
+        self.logger= logger
 
 
     def random_partition(self, n, data):
         all_idxs = np.arange(data.shape[0])
-        w = list(accumulate(data[:, self.data_column]))
+        w = list(accumulate(data[:, -1]))
         idxs1 = np.asarray(choices(all_idxs, cum_weights=w, k = n))
         idxs2 = np.asarray(list(set(all_idxs) - set(idxs1)))
         return idxs1, idxs2
 
-    def fit(self, data):
+    def fit(self, _data):
+        data = _data[:,:-1]
+
         mean = np.mean(data, axis = 0)
         dataNorm = data - mean
         u, s, v = np.linalg.svd(dataNorm, full_matrices=1, compute_uv=1)
@@ -44,15 +44,19 @@ class npSvdModel:
         a = v[0,1]
         b = v[1,1]
         c = -(mean[0] * a + mean[1] * b)
-#        print(a, b, c)
+        if not a and not b and not c:
+            self.logger.critical("Incorrect SVD decomposition, all values are null!")
+            self.logger.critical("data shape: %s", data.shape)
+            self.logger.critical("v: %s", v)
+            raise ValueError("Aborting execution, need to debug")
         return (a, b , c)
 
     def get_error(self, data, model):
         a, b, c = model
 
         poses = np.vstack((
-                            data[:, self.x_column].tolist(),
-                            data[:, self.y_column].tolist(),
+                            data[:, 0].tolist(),
+                            data[:, 1].tolist(),
                             [np.ones(data.shape[0])]
                         )).T
         err = np.fabs(np.dot(poses, np.float32([a, b, c])))
@@ -97,14 +101,17 @@ class ransac:
             # Using numpy, but opencv2.findNonZero(img) could be used ( would required uint8)
             nz = np.nonzero(subImage)
             if not len(nz[0]):
-                self.logger.error("Skipping this line - all pixels are nulls in box:", box)
+                self.logger.error("Skipping this line - all pixels are nulls in box: %s", box)
                 continue
             points = np.empty([len(nz[0]), 3], dtype=np.float32)
             points[:,0:2] = np.transpose(nz).astype(np.float32)
             points[:,2] = subImage[nz]
             # Do Line Ransac estimation on subimage
-            model = npSvdModel(0, 1, 2, debug=debug)
+            model = npSvdModel(self.logger, debug=debug)
             ransac_fit, ransac_data = doRansac(points, model, n, k, t, d, debug = debug, return_all = True, logger=self.logger)
+            if ransac_fit is None:
+                self.logger.debug("RANSAC did not fount out a line within this box %s", box);
+                continue
             self.logger.debug("Line standard equation: ax + by + c = 0: %s", ransac_fit);
             ransac_lines.append(line([ransac_fit], imageBox = [(0, 0), (imgIn.shape[1] - 1, imgIn.shape[0] - 1)]))
 
