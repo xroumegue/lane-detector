@@ -78,14 +78,23 @@ return bestfit
 """
     if logger is None:
         logger = logging.getLogger('ransac')
-    if len(data) == 0:
-        raise ValueError("Ransac data matrix is empty")
     iterations = 0
     bestfit = None
     besterr = numpy.inf
     best_inlier_idxs = None
-    if n > data.shape[0]:
-        n = data.shape[0]
+
+    data_len = len(data)
+
+    if data_len == 0:
+        raise ValueError("Ransac data matrix is empty")
+
+    if n > data_len:
+        n = data_len
+        logger.debug("Number of samples reduces to %d to fit data population", n)
+
+    if data_len < d:
+        d = data_len - n - 1
+        logger.debug("Number of inliers threshold reduces to %d to fit data population", d)
 
     try:
         doRandom = model.random_partition
@@ -96,6 +105,9 @@ return bestfit
 
     while iterations < k:
         maybe_idxs, test_idxs = doRandom(n, data)
+        if not len(test_idxs):
+            logger.error("Test population is empty, fallback to full set")
+            test_idxs = maybe_idxs
         maybeinliers = data[maybe_idxs,:]
         test_points = data[test_idxs]
         maybemodel = model.fit(maybeinliers)
