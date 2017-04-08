@@ -41,6 +41,8 @@ class line:
             elif len(ptsPolar[0]) == 3:
                 """ ax + by + c = 0"""
                 a, b, c = ptsPolar[0]
+                if not a and not b and not c:
+                    raise ValueError("All lines parameters (a, b, c) are null!")
                 self.theta = math.atan2(b, a)
                 self.r = -c/math.sqrt(a*a + b*b)
                 if self.r < 0:
