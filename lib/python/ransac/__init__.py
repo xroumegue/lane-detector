@@ -85,6 +85,7 @@ return bestfit
 
     data_len = len(data)
 
+    logger.debug("Parameters(n, k, t, d): (%s, %s, %s, %s), data (len): (%d)", n, k, t, d, data_len)
     if data_len == 0:
         raise ValueError("Ransac data matrix is empty")
 
@@ -130,7 +131,9 @@ return bestfit
                 best_inlier_idxs = numpy.concatenate( (maybe_idxs, also_idxs) )
         iterations+=1
     if bestfit is None:
-        raise ValueError("did not meet fit acceptance criteria")
+        logger.debug("did not meet fit acceptance criteria")
+    else:
+        logger.debug("Best fit contains %d inliers", len(best_inlier_idxs))
     if return_all:
         return bestfit, {'inliers':best_inlier_idxs}
     else:
