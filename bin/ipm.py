@@ -15,10 +15,10 @@ FORMAT = '%(asctime)-15s-%(levelname)-5s-%(funcName)-8s-%(lineno)-4s-%(message)s
 ESCAPE = '\033'
 
 def parse_cmdline(parser):
-    parser.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG, default=logging.INFO, help='Be verbose...')
-    parser.add_argument('-i', '--image', help='Image file')
+	parser.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG, default=logging.INFO, help='Be verbose...')
+	parser.add_argument('-i', '--image', help='Image file')
 
-    return parser.parse_args()
+	return parser.parse_args()
 
 # Some api in the chain is translating the keystrokes to this octal string
 # so instead of saying: ESCAPE = 27, we use the following.
@@ -26,79 +26,198 @@ ESCAPE = '\033'
 
 # The function called whenever a key is pressed. Note the use of Python tuples to pass in: (key, x, y)
 def keyPressed(*args):
-    global window
-    # If escape is pressed, kill everything.
-    if args[0].decode() == ESCAPE:
-        sys.exit()
+	global window
+	# If escape is pressed, kill everything.
+	if args[0].decode() == ESCAPE:
+		sys.exit()
 
 class Texture( object ):
-        """Texture either loaded from a file."""
-        def __init__( self ):
-                self.xSize, self.ySize = 0, 0
-                self.rawRefence = None
+	"""Texture either loaded from a file."""
+	def __init__( self ):
+		self.xSize, self.ySize = 0, 0
+		self.rawRefence = None
 
 class FileTexture( Texture ):
-        """Texture loaded from a file."""
-        def __init__( self, fileName ):
-                im = Image.open(fileName)
-                self.xSize = im.size[0]
-                self.ySize = im.size[1]
-                self.rawReference=np.array(list(im.getdata()),np.uint8)
+	"""Texture loaded from a file."""
+	def __init__( self, fileName ):
+		im = Image.open(fileName)
+		self.xSize = im.size[0]
+		self.ySize = im.size[1]
+		self.rawReference=np.array(list(im.getdata()),np.uint8)
+
+class ShaderProgram ( object ):
+	"""Manage GLSL programs."""
+	def __init__( self ):
+		self.__requiredExtensions = ["GL_ARB_fragment_shader",
+				 "GL_ARB_vertex_shader",
+				 "GL_ARB_shader_objects",
+				 "GL_ARB_shading_language_100",
+				 "GL_ARB_vertex_shader",
+				 "GL_ARB_fragment_shader"]
+		self.checkExtensions( self.__requiredExtensions )
+		self.__shaderProgramID = glCreateProgramObjectARB()
+		self.__checkOpenGLError()
+		self.__programReady = False
+		self.__isEnabled = False
+		self.__shaderObjectList = []
+
+	def checkExtensions( self, extensions ):
+		"""Check if all extensions in a list are present."""
+		for ext in extensions:
+			if ( not ext ):
+				print("Driver does not support %s", ext)
+				sys.exit()
+
+	def __checkOpenGLError( self ):
+		"""Print OpenGL error message."""
+		err = glGetError()
+		if ( err != GL_NO_ERROR ):
+			print('GLERROR: %s', gluErrorString( err ))
+			sys.exit()
+
+	def reset( self ):
+		"""Disable and remove all shader programs"""
+		for shaderID in self.__shaderObjectList:
+			glDetachObjectARB( self.__shaderProgramID, shaderID )
+			glDeleteObjectARB( shaderID )
+			self.__shaderObjectList.remove( shaderID )
+			self.__checkOpenGLError( )
+		glDeleteObjectARB( self.__shaderProgramID )
+		self.__checkOpenGLError( )
+		self.__shaderProgramID = glCreateProgramObjectARB()
+		self.__checkOpenGLError( )
+		self.__programReady = False
+
+	def addShader( self, shaderType, fileName ):
+		"""Read a shader program from a file.
+
+		The program is load and compiled"""
+		shaderHandle = glCreateShaderObjectARB( shaderType )
+		self.__checkOpenGLError( )
+		sourceString = open(fileName, 'r').read()
+		glShaderSourceARB(shaderHandle, [sourceString] )
+		self.__checkOpenGLError( )
+		glCompileShaderARB( shaderHandle )
+		success = glGetObjectParameterivARB( shaderHandle,
+				GL_OBJECT_COMPILE_STATUS_ARB)
+		if (not success):
+			print(glGetInfoLogARB( shaderHandle ))
+			sys.exit( )
+		glAttachObjectARB( self.__shaderProgramID, shaderHandle )
+		self.__checkOpenGLError( )
+		self.__shaderObjectList.append( shaderHandle )
+
+	def linkShaders( self ):
+		"""Link compiled shader programs."""
+		glLinkProgramARB( self.__shaderProgramID )
+		self.__checkOpenGLError( )
+		success = glGetObjectParameterivARB( self.__shaderProgramID,
+				GL_OBJECT_LINK_STATUS_ARB )
+		if (not success):
+			print(glGetInfoLogARB(self.__shaderProgramID))
+			sys.exit()
+		else:
+			self.__programReady = True
+
+	def enable( self ):
+		"""Activate shader programs."""
+		if self.__programReady:
+			glUseProgramObjectARB( self.__shaderProgramID )
+			self.__isEnabled=True
+			self.__checkOpenGLError( )
+		else:
+			print("Shaders not compiled/linked properly, enable() failed")
+
+	def disable( self ):
+		"""De-activate shader programs."""
+		glUseProgramObjectARB( 0 )
+		self.__isEnabled=False
+		self.__checkOpenGLError( )
+
+	def indexOfUniformVariable( self, variableName ):
+		"""Find the index of a uniform variable."""
+		if not self.__programReady:
+			print("\nShaders not compiled/linked properly")
+			result = -1
+		else:
+			result = glGetUniformLocationARB( self.__shaderProgramID, variableName)
+			self.__checkOpenGLError( )
+		if result < 0:
+			print('Variable "%s" not known to the shader', ( variableName ))
+			sys.exit( )
+		else:
+			return result
+
+	def indexOfVertexAttribute( self, attributeName ):
+		"""Find the index of an attribute variable."""
+		if not self.__programReady:
+			print("\nShaders not compiled/linked properly")
+			result = -1
+		else:
+			result = glGetAttribLocationARB( self.__shaderProgramID, attributeName )
+			self.__checkOpenGLError( )
+		if result < 0:
+			print('Attribute "%s" not known to the shader', ( attributeName ))
+			sys.exit( )
+		else:
+			return result
+
+	def isEnabled( self ):
+		return self.__isEnabled
 
 def display(  ):
-        """Glut display function."""
-        glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
-        glColor3f( 1, 1, 1 )
-        glBegin( GL_QUADS )
-        glTexCoord2f( 0, 1 )
-        glVertex3f( -0.5, -0.5, 0 )
-        glTexCoord2f( 0, 0 )
-        glVertex3f( -0.5, +0.5, 0 )
-        glTexCoord2f( 1, 0 )
-        glVertex3f( 0.5, +0.5, 0 )
-        glTexCoord2f( 1, 1 )
-        glVertex3f( 0.5, -0.5, 0 )
-        glEnd(  )
-        glutSwapBuffers (  )
+	"""Glut display function."""
+	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
+	glColor3f( 1, 1, 1 )
+	glBegin( GL_QUADS )
+	glTexCoord2f( 0, 1 )
+	glVertex3f( -0.5, -0.5, 0 )
+	glTexCoord2f( 0, 0 )
+	glVertex3f( -0.5, +0.5, 0 )
+	glTexCoord2f( 1, 0 )
+	glVertex3f( 0.5, +0.5, 0 )
+	glTexCoord2f( 1, 1 )
+	glVertex3f( 0.5, -0.5, 0 )
+	glEnd(	)
+	glutSwapBuffers (  )
 
 def init( fileName ):
-        """Glut init function."""
-        try:
-                texture = FileTexture( fileName )
-        except:
-                print('could not open ', fileName, '; using random texture')
-                texture = RandomTexture( 256, 256 )
-        glClearColor ( 0, 0, 0, 0 )
-        glShadeModel( GL_SMOOTH )
-        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT )
-        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT )
-        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR )
-        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR )
-        glTexImage2D( GL_TEXTURE_2D, 0, 3, texture.xSize, texture.ySize, 0,
-                                 GL_RGB, GL_UNSIGNED_BYTE, texture.rawReference )
-        glEnable( GL_TEXTURE_2D )
-
+	"""Glut init function."""
+	try:
+		texture = FileTexture( fileName )
+	except:
+		print('could not open ', fileName, '; using random texture')
+		texture = RandomTexture( 256, 256 )
+	glClearColor ( 0, 0, 0, 0 )
+	glShadeModel( GL_SMOOTH )
+	glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT )
+	glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT )
+	glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR )
+	glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR )
+	glTexImage2D( GL_TEXTURE_2D, 0, 3, texture.xSize, texture.ySize, 0,
+							 GL_RGB, GL_UNSIGNED_BYTE, texture.rawReference )
+	glEnable( GL_TEXTURE_2D )
 
 def main():
-    logging.basicConfig(format=FORMAT)
-    parser = ArgumentParser(description= "Apply an Inverse Perspective Mapping on a img")
-    args = parse_cmdline(parser)
-    log = logging.getLogger("ipm openGL")
-    log.setLevel(args.verbose)
-    log.info("OpenGL acceleration to compute an IPM")
+	logging.basicConfig(format=FORMAT)
+	parser = ArgumentParser(description= "Apply an Inverse Perspective Mapping on a img")
+	args = parse_cmdline(parser)
+	log = logging.getLogger("ipm openGL")
+	log.setLevel(args.verbose)
+	log.info("OpenGL acceleration to compute an IPM")
 
-    glutInit( sys.argv )
-    glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGB )
-    glutInitWindowSize( 250, 250 )
-    glutInitWindowPosition( 100, 100 )
-    glutCreateWindow( sys.argv[0] )
-    init(args.image)
+	glutInit( sys.argv )
+	glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGB )
+	glutInitWindowSize( 250, 250 )
+	glutInitWindowPosition( 100, 100 )
+	glutCreateWindow( sys.argv[0] )
+	init(args.image)
 
-    # Register the function called when the keyboard is pressed.
-    glutKeyboardFunc(keyPressed)
+	# Register the function called when the keyboard is pressed.
+	glutKeyboardFunc(keyPressed)
 
-    glutDisplayFunc( display )
-    glutMainLoop(  )
+	glutDisplayFunc( display )
+	glutMainLoop(  )
 
 print("Hit ESC key to quit.")
 main()
