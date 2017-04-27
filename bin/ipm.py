@@ -1,12 +1,22 @@
 #! /usr/bin/env python3
 
-from OpenGL.GL import *
-from OpenGL.GLUT import *
-from OpenGL.GLU import *
 import sys
+try:
+	from OpenGL.GL import *
+	from OpenGL.GLUT import *
+	from OpenGL.GLU import *
+	from OpenGL.GL.ARB.shader_objects import *
+	from OpenGL.GL.ARB.fragment_shader import *
+	from OpenGL.GL.ARB.vertex_shader import *
+except:
+	print("Error importing GL / shaders")
+	sys.exit()
+
+from os.path import isfile, dirname, realpath, join
 from PIL import Image
 import logging
 import numpy as np
+import math
 
 from argparse import ArgumentParser, FileType, Action, Namespace
 
@@ -24,12 +34,6 @@ def parse_cmdline(parser):
 # so instead of saying: ESCAPE = 27, we use the following.
 ESCAPE = '\033'
 
-# The function called whenever a key is pressed. Note the use of Python tuples to pass in: (key, x, y)
-def keyPressed(*args):
-	global window
-	# If escape is pressed, kill everything.
-	if args[0].decode() == ESCAPE:
-		sys.exit()
 
 class Texture( object ):
 	"""Texture either loaded from a file."""
@@ -37,7 +41,7 @@ class Texture( object ):
 		self.xSize, self.ySize = 0, 0
 		self.rawRefence = None
 
-class FileTexture( Texture ):
+class FileTexture(Texture):
 	"""Texture loaded from a file."""
 	def __init__( self, fileName ):
 		im = Image.open(fileName)
@@ -165,38 +169,72 @@ class ShaderProgram ( object ):
 	def isEnabled( self ):
 		return self.__isEnabled
 
-def display(  ):
-	"""Glut display function."""
-	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
-	glColor3f( 1, 1, 1 )
-	glBegin( GL_QUADS )
-	glTexCoord2f( 0, 1 )
-	glVertex3f( -0.5, -0.5, 0 )
-	glTexCoord2f( 0, 0 )
-	glVertex3f( -0.5, +0.5, 0 )
-	glTexCoord2f( 1, 0 )
-	glVertex3f( 0.5, +0.5, 0 )
-	glTexCoord2f( 1, 1 )
-	glVertex3f( 0.5, -0.5, 0 )
-	glEnd(	)
-	glutSwapBuffers (  )
+	def getShaderProgId(self):
+		return self.__shaderProgramID
 
-def init( fileName ):
+# The function called whenever a key is pressed. Note the use of Python tuples to pass in: (key, x, y)
+def keyPressed(*args):
+	global window
+	# If escape is pressed, kill everything.
+	if args[0].decode() == ESCAPE:
+		sys.exit()
+
+def display():
+	"""Glut display function."""
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+	glColor3f(1.0, 0.0, 0.0)
+	glBegin(GL_QUADS)
+#	glTexCoord2f( 0, 1 )
+	glVertex3f(-0.5, -0.5, 0)
+#	glTexCoord2f( 0, 0 )
+	glVertex3f(-0.5, +0.5, 0)
+#	glTexCoord2f( 1, 0 )
+	glVertex3f(0.5, +0.5, 0)
+#	glTexCoord2f( 1, 1 )
+	glVertex3f(0.5, -0.5, 0)
+	glEnd()
+	glutSwapBuffers()
+
+def initTexture(fileName):
 	"""Glut init function."""
 	try:
-		texture = FileTexture( fileName )
+		texture = FileTexture(fileName)
 	except:
 		print('could not open ', fileName, '; using random texture')
-		texture = RandomTexture( 256, 256 )
-	glClearColor ( 0, 0, 0, 0 )
-	glShadeModel( GL_SMOOTH )
-	glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT )
-	glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT )
-	glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR )
-	glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR )
-	glTexImage2D( GL_TEXTURE_2D, 0, 3, texture.xSize, texture.ySize, 0,
-							 GL_RGB, GL_UNSIGNED_BYTE, texture.rawReference )
-	glEnable( GL_TEXTURE_2D )
+		return
+
+	glClearColor(0, 0, 0, 0)
+	glShadeModel(GL_SMOOTH)
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+	glTexImage2D(GL_TEXTURE_2D, 0, 3, texture.xSize, texture.ySize, 0,
+							 GL_RGB, GL_UNSIGNED_BYTE, texture.rawReference)
+	glEnable(GL_TEXTURE_2D)
+
+def initShaders():
+	"""Initialise shaderProg object."""
+	global sP
+	sP = ShaderProgram( )
+	sP.addShader(GL_FRAGMENT_SHADER_ARB, join(dirname(realpath(__file__)),'ipm.frag'))
+	glBindFragDataLocation(sP.getShaderProgId(), 0, 'fragColor')
+
+	sP.linkShaders( )
+
+	sP.enable( )
+
+	glUniform1fARB( sP.indexOfUniformVariable("pitch"), 14.0 * math.pi / 180)
+	glUniform1fARB( sP.indexOfUniformVariable("yaw"), 0 * math.pi / 180)
+	glUniform1fARB( sP.indexOfUniformVariable("fu"), 309.4362)
+	glUniform1fARB( sP.indexOfUniformVariable("fv"), 344.2161)
+	glUniform1fARB( sP.indexOfUniformVariable("cu"), 317.9034)
+	glUniform1fARB( sP.indexOfUniformVariable("cv"), 256.5352)
+	glUniform1fARB( sP.indexOfUniformVariable("h"), 2179.8)
+
+	glUniform2fvARB( sP.indexOfUniformVariable("iResolution"), 1, (640, 480))
+	glUniformMatrix2fvARB(sP.indexOfUniformVariable("wROI"), 1, GL_FALSE, ((-11048.41, 3933.21), (7204.76,15698.30)))
+	glUniformMatrix2fvARB(sP.indexOfUniformVariable("iROI"), 1, GL_FALSE, ((100, 220), (460, 350)))
 
 def main():
 	logging.basicConfig(format=FORMAT)
@@ -206,18 +244,21 @@ def main():
 	log.setLevel(args.verbose)
 	log.info("OpenGL acceleration to compute an IPM")
 
-	glutInit( sys.argv )
-	glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGB )
-	glutInitWindowSize( 250, 250 )
-	glutInitWindowPosition( 100, 100 )
-	glutCreateWindow( sys.argv[0] )
-	init(args.image)
+	glutInit(sys.argv)
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB)
+	glutInitWindowSize(250, 250)
+	glutInitWindowPosition(100, 100)
+	glutCreateWindow(sys.argv[0])
+	glutKeyboardFunc(keyPressed)
+	glutDisplayFunc( display )
+
+
+	initTexture(args.image)
+	initShaders()
+
+	glutMainLoop(  )
 
 	# Register the function called when the keyboard is pressed.
-	glutKeyboardFunc(keyPressed)
-
-	glutDisplayFunc( display )
-	glutMainLoop(  )
 
 print("Hit ESC key to quit.")
 main()
