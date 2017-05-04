@@ -20,8 +20,8 @@ def interpolation(array,x,y):
     return t1*u1*array[j][i]+t*u1*array[j+1][i]+t*u*array[j+1][i+1]+t1*u*array[j][i+1]
 
 class ipm:
-    def __init__(self, conf):
-       self.logger = logging.getLogger(laneDetector.DETECTOR_LOGGER_NAME)
+    def __init__(self, conf, loggerName = None):
+       self.logger = logging.getLogger(loggerName)
        self.conf = conf
        self.vp = self._getVanishingPoint()
        self.roi = self._getROI()

@@ -7,7 +7,6 @@ import cv2;
 import math;
 from itertools import accumulate
 from random import choices
-import laneDetector
 from ransac import ransacModel, getModel, doRansac
 from laneDetector.lines import line
 from sys import version_info
@@ -64,8 +63,8 @@ class npSvdModel:
 
 class ransac:
     """A class thresholding the image """
-    def __init__(self, conf):
-        self.logger = logging.getLogger(laneDetector.DETECTOR_LOGGER_NAME)
+    def __init__(self, conf, loggerName = None):
+        self.logger = logging.getLogger(loggerName)
         self.conf = conf
 
     def compute(self, imgIn, _lines):

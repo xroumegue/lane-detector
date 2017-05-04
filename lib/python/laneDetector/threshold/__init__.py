@@ -5,12 +5,11 @@ import os
 import numpy as np;
 import cv2;
 import math;
-import laneDetector
 
 class threshold:
     """A class thresholding the image """
-    def __init__(self, conf):
-        self.logger = logging.getLogger(laneDetector.DETECTOR_LOGGER_NAME)
+    def __init__(self, conf, loggerName = None):
+        self.logger = logging.getLogger(loggerName)
         self.conf = conf
 
     def compute(self, imgIn):

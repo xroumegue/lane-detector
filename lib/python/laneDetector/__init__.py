@@ -83,7 +83,7 @@ class laneDetector:
         for (k, v) in self.config.items('filter'):
             conf[k] = v
 
-        self.filter = filter(conf)
+        self.filter = filter(conf, loggerName = DETECTOR_LOGGER_NAME)
         imgOut = self.filter.compute(img)
         return imgOut
 
@@ -97,7 +97,7 @@ class laneDetector:
             conf[k] = v
         conf['value'] = self.config.getfloat('threshold', 'value')
 
-        self.threshold = threshold(conf)
+        self.threshold = threshold(conf, loggerName = DETECTOR_LOGGER_NAME)
         imgOut = self.threshold.compute(img)
         return imgOut
 
@@ -114,7 +114,7 @@ class laneDetector:
         conf['minDistance'] = self.config.getfloat('lines', 'minDistance')
         conf['imageBox'] = [(0, 0), (img.shape[1] - 1, img.shape[0] - 1)]
 
-        self.lines = lines(conf)
+        self.lines = lines(conf, loggerName = DETECTOR_LOGGER_NAME)
         return self.lines.compute(img)
 
     def ransac(self, img, lines):
@@ -126,7 +126,7 @@ class laneDetector:
         for (k, v) in self.config.items('ransac'):
             conf[k] = v
 
-        self.ransac = ransac(conf)
+        self.ransac = ransac(conf, loggerName = DETECTOR_LOGGER_NAME)
         ransacLines = self.ransac.compute(img, lines)
         for _line in ransacLines:
             _line.setImageBox([(0, 0), (img.shape[1] - 1, img.shape[0] - 1)])
@@ -155,7 +155,7 @@ class laneDetector:
         conf['ipmRight'] = self.config.getint('ipm', 'ipmRight')
         conf['ipmInterpolation'] = self.config.getint('ipm', 'ipmInterpolation')
 
-        myIpm = ipm(conf)
+        myIpm = ipm(conf, DETECTOR_LOGGER_NAME)
 
         myIpm.getVanishingPoint()
         self.logger.info('Vanishing point: (%.2f, %.2f)', myIpm.vp[0], myIpm.vp[1])

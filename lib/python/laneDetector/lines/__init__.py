@@ -1,6 +1,5 @@
 import logging
 import configparser
-import laneDetector
 from argparse import ArgumentParser, FileType, Action, Namespace
 import os
 
@@ -10,8 +9,8 @@ import math;
 
 class line:
     """ A class describing a line(https://en.wikipedia.org/wiki/Line_(geometry)) in a image """
-    def __init__(self, ptsPolar, score = None, imageBox = None):
-        self.logger = logging.getLogger(laneDetector.DETECTOR_LOGGER_NAME)
+    def __init__(self, ptsPolar, score = None, imageBox = None, loggerName = None):
+        self.logger = logging.getLogger(loggerName)
         self.pts = None
         self.r = None
         self.theta = None
@@ -220,8 +219,8 @@ class line:
 
 class lines:
     """A class detecting lines in the image """
-    def __init__(self, conf):
-        self.logger = logging.getLogger(laneDetector.DETECTOR_LOGGER_NAME)
+    def __init__(self, conf, loggerName = None):
+        self.logger = logging.getLogger(loggerName)
         self.conf = conf
 
     def group(self, _lines):
