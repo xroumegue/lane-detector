@@ -43,13 +43,17 @@ class IpmCanvas(app.Canvas, ipm):
     def __init__(self, fileName, conf):
         app.Canvas.__init__(self,
                         keys = 'interactive',
-                        size = (1280, 720),
+                        size = (conf['ipmWidth'], conf['ipmHeight']),
                         position = (0,0),
                         title = 'IPM',
                         show = False,
-                        resizable = True)
+                        resizable = False)
 
         ipm.__init__(self, conf, "ipm openGL")
+
+        self._rendertex = gloo.Texture2D(shape=(self.size[1], self.size[0], 4))
+        self._fbo = gloo.FrameBuffer(self._rendertex,
+                                    gloo.RenderBuffer((self.size[1], self.size[0])))
 
         try:
             fragmentShaderSourceString = open(FRAGMENT_SHADER_FILENAME).read()
@@ -69,17 +73,18 @@ class IpmCanvas(app.Canvas, ipm):
         img = Image.open(fileName)
         im = np.array(list(img.getdata()),np.uint8).reshape((img.size[1], img.size[0], 3))
 
-        gloo.set_viewport(0, 0, *self.physical_size)
+        gloo.set_viewport(0, 0, *self.size)
 
         tex = gloo.Texture2D(im)
         tex.interpolation = 'linear'
         tex.wrapping = 'repeat'
         self.program['iChannel'] = tex
         self.program['iChannelResolution'] = (im.shape[1], im.shape[0], im.shape[2])
-        self.program['iResolution'] = (self.physical_size[0], self.physical_size[1], 0.)
+        self.program['iResolution'] = (self.size[0], self.size[1], 0.)
 
         self.getUniforms()
-        self.show()
+#        self.show()
+        self.update()
 
     def getUniforms(self):
         self._getMi2gMat()
@@ -156,15 +161,18 @@ class IpmCanvas(app.Canvas, ipm):
         return Mg2i
 
     def on_draw(self, event):
-        self.program.draw()
-
-    def on_resize(self, event):
-        gloo.set_viewport(0, 0, *event.physical_size)
-        self.program['iResolution'] = (self.physical_size[0], self.physical_size[1], 0.)
+        with self._fbo:
+            gloo.clear('black')
+            gloo.set_viewport(0, 0, *self.size)
+            self.program.draw()
+            self.im = self._fbo.read()
+            app.quit()
 
 def parse_cmdline(parser):
     parser.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG, default=logging.INFO, help='Be verbose...')
     parser.add_argument('-i', '--image', help='Image file')
+    parser.add_argument('-s', '--show', help='show Image', action='store_const', const=True, default=False)
+    parser.add_argument('-o', '--output', help='Output IPM filename', default="ipm.bmp")
     parser.add_argument('-c', '--config', default='ipm.conf', help='IPM configuration file')
 
     return parser.parse_args()
@@ -222,6 +230,11 @@ def main():
 
     c = IpmCanvas(args.image, conf)
     app.run()
+    ipmImage = c.im
+    im = Image.frombuffer("RGBA", (c.im.shape[1], c.im.shape[0]), c.im.copy(order='C'), "raw", "RGBA", 0, 1)
+    if args.show is True:
+        im.show()
+    im.save(args.output)
 
 print("Hit ESC key to quit.")
 main()
