@@ -218,7 +218,7 @@ class ipm(ipmCore, ipmGL):
     def getIpmFromFile(self, filename):
         img = Image.open(filename)
         im = np.array(list(img.getdata()),np.uint8).reshape((img.size[1], img.size[0], 3))
-        c = ipmGL.__init__(self, filename, self.conf, self.getROI(), self.logger)
+        c = ipmGL.__init__(self, im, self.conf, self.getROI(), self.logger)
 #        app.run()
         im = Image.frombuffer("RGBA", (c.im.shape[1], c.im.shape[0]), c.im.copy(order='C'), "raw", "RGBA", 0, 1)
         return im

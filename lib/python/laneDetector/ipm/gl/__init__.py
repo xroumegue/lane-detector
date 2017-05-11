@@ -33,7 +33,7 @@ FRAGMENT_SHADER_FILENAME = join(dirname(realpath(__file__)), 'ipm.frag')
 VERTEX_SHADER_FILENAME = join(dirname(realpath(__file__)), 'ipm.vert')
 
 class ipmGL(app.Canvas):
-    def __init__(self, fileName, conf, roi, logger):
+    def __init__(self, im, conf, roi, logger):
         vispy.set_log_level('DEBUG')
         try:
             vispy.use(app='glfw', gl='gl+')
@@ -67,9 +67,6 @@ class ipmGL(app.Canvas):
 
         self.program = gloo.Program(vertexShaderSourceString, fragmentShaderSourceString)
         self.program["position"] = [(-1, -1), (-1, 1), (1, 1), (-1, -1), (1, 1), (1, -1)]
-
-        img = Image.open(fileName)
-        im = np.array(list(img.getdata()),np.uint8).reshape((img.size[1], img.size[0], 3))
 
         gloo.set_viewport(0, 0, *self.size)
 

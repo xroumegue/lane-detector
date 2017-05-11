@@ -82,6 +82,7 @@ def main():
         sys.exit()
 
     c = laneDetector.ipm(conf, "ipm openGL")
+
     im = c.getIpmFromFile(args.image)
     if args.show is True:
         im.show()
