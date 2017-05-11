@@ -2,6 +2,12 @@ import logging
 import numpy as np
 import math
 import laneDetector
+from laneDetector.ipm.gl import ipmGL
+try:
+    from PIL import Image
+except:
+    print("Error while importing PIL, please do: #pip install Pillow")
+    sys.exit()
 
 def interpolation(array,x,y):
     s = array.shape
@@ -19,7 +25,7 @@ def interpolation(array,x,y):
         return u*array[j][i]+u1*array[j+1][i]
     return t1*u1*array[j][i]+t*u1*array[j+1][i]+t*u*array[j+1][i+1]+t1*u*array[j][i+1]
 
-class ipm:
+class ipmCore:
     def __init__(self, conf, loggerName = None):
        self.logger = logging.getLogger(loggerName)
        self.conf = conf
@@ -204,3 +210,15 @@ class ipm:
 
         return self.out
 
+
+class ipm(ipmCore, ipmGL):
+    def __init__(self, conf, loggerName = None):
+        ipmCore.__init__(self, conf, loggerName)
+
+    def getIpmFromFile(self, filename):
+        img = Image.open(filename)
+        im = np.array(list(img.getdata()),np.uint8).reshape((img.size[1], img.size[0], 3))
+        c = ipmGL.__init__(self, filename, self.conf, self.getROI(), self.logger)
+#        app.run()
+        im = Image.frombuffer("RGBA", (c.im.shape[1], c.im.shape[0]), c.im.copy(order='C'), "raw", "RGBA", 0, 1)
+        return im

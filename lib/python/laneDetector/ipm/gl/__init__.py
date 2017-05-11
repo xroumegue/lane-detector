@@ -8,6 +8,12 @@ except:
     sys.exit()
 
 try:
+    from PIL import Image
+except:
+    print("Error while importing PIL, please do: #pip install Pillow")
+    sys.exit()
+
+try:
     import vispy
     from vispy import app
     from vispy import gloo
@@ -15,29 +21,25 @@ except:
     print("Error while importing vispy module, please do: #pip install vispy")
     sys.exit()
 
-try:
-    from PIL import Image
-except:
-    print("Error while importing PIL, please do: #pip install Pillow")
-    sys.exit()
 
 from os import listdir
 from os.path import isfile, dirname, realpath, join
+import laneDetector
 
-
-import laneDetector.ipm as ipm
-import logging
 import math
-from argparse import ArgumentParser, FileType, Action, Namespace
-import configparser
 
-FORMAT = '%(asctime)-15s-%(levelname)-5s-%(funcName)-8s-%(lineno)-4s-%(message)s'
 
 FRAGMENT_SHADER_FILENAME = join(dirname(realpath(__file__)), 'ipm.frag')
 VERTEX_SHADER_FILENAME = join(dirname(realpath(__file__)), 'ipm.vert')
 
-class IpmCanvas(app.Canvas, ipm):
-    def __init__(self, fileName, conf):
+class ipmGL(app.Canvas):
+    def __init__(self, fileName, conf, roi, logger):
+        vispy.set_log_level('DEBUG')
+        try:
+            vispy.use(app='glfw', gl='gl+')
+        except RuntimeError as e:
+            pass
+
         app.Canvas.__init__(self,
                         keys = 'interactive',
                         size = (conf['ipmWidth'], conf['ipmHeight']),
@@ -46,7 +48,6 @@ class IpmCanvas(app.Canvas, ipm):
                         show = False,
                         resizable = False)
 
-        ipm.__init__(self, conf, "ipm openGL")
 
         self._rendertex = gloo.Texture2D(shape=(self.size[1], self.size[0], 4))
         self._fbo = gloo.FrameBuffer(self._rendertex,
@@ -55,13 +56,13 @@ class IpmCanvas(app.Canvas, ipm):
         try:
             fragmentShaderSourceString = open(FRAGMENT_SHADER_FILENAME).read()
         except:
-            self.logger.fatal("%s does not exist !", FRAGMENT_SHADER_FILENAME)
+            logger.fatal("%s does not exist !", FRAGMENT_SHADER_FILENAME)
             sys.exit()
 
         try:
             vertexShaderSourceString = open(VERTEX_SHADER_FILENAME).read()
         except:
-            self.logger.fatal("%s does not exist !", VERTEX_SHADER_FILENAME)
+            logger.fatal("%s does not exist !", VERTEX_SHADER_FILENAME)
             sys.exit()
 
         self.program = gloo.Program(vertexShaderSourceString, fragmentShaderSourceString)
@@ -79,47 +80,47 @@ class IpmCanvas(app.Canvas, ipm):
         self.program['iChannelResolution'] = (im.shape[1], im.shape[0], im.shape[2])
         self.program['iResolution'] = (self.size[0], self.size[1], 0.)
 
-        self.getUniforms()
-#        self.show()
+        self.getUniforms(conf, roi)
         self.update()
+        app.run()
+        return self
 
-    def getUniforms(self):
-        self._getMi2gMat()
-        self._getMg2iMat()
-        self._getUniformROI()
-        self._getUniformIPM()
-        self.program['uH'] = self.conf['h']
+    def getUniforms(self, conf, roi):
+        self._getMi2gMat(conf)
+        self._getMg2iMat(conf)
+        self._getUniformROI(conf, roi)
+        self._getUniformIPM(conf)
+        self.program['uH'] = conf['h']
 
-    def _getUniformROI(self):
-        _ROI = self.getROI()
+    def _getUniformROI(self, conf, roi):
         uROI = np.array((2,2), dtype=np.float32)
         uROI = [
-            (_ROI['x']['min'], _ROI['y']['min']),
-            (_ROI['x']['max'], _ROI['y']['max'])
+            (roi['x']['min'], roi['y']['min']),
+            (roi['x']['max'], roi['y']['max'])
         ]
         self.program['uwROI'] = uROI
         return uROI
 
-    def _getUniformIPM(self):
+    def _getUniformIPM(self, conf):
         uIPM = np.array((2,2), dtype=np.float32)
         uIPM = [
-            (self.conf['ipmLeft'], self.conf['ipmBottom']),
-            (self.conf['ipmRight'], self.conf['ipmTop'])
+            (conf['ipmLeft'], conf['ipmBottom']),
+            (conf['ipmRight'], conf['ipmTop'])
 
         ]
         self.program['uIPM'] = uIPM
         return uIPM
 
-    def _getMi2gMat(self):
-        c1 = self.conf['c1']
-        s1 = self.conf['s1']
-        c2 = self.conf['c2']
-        s2 = self.conf['s2']
-        fu = self.conf['fu']
-        fv = self.conf['fv']
-        cu = self.conf['cu']
-        cv = self.conf['cv']
-        h = self.conf['h']
+    def _getMi2gMat(self, conf):
+        c1 = conf['c1']
+        s1 = conf['s1']
+        c2 = conf['c2']
+        s2 = conf['s2']
+        fu = conf['fu']
+        fv = conf['fv']
+        cu = conf['cu']
+        cv = conf['cv']
+        h = conf['h']
 
         Mi2g = np.zeros((4, 4), dtype=np.float32)
         Mi2g = [
@@ -133,16 +134,16 @@ class IpmCanvas(app.Canvas, ipm):
         return Mi2g
 
 
-    def _getMg2iMat(self):
-        c1 = self.conf['c1']
-        s1 = self.conf['s1']
-        c2 = self.conf['c2']
-        s2 = self.conf['s2']
-        fu = self.conf['fu']
-        fv = self.conf['fv']
-        cu = self.conf['cu']
-        cv = self.conf['cv']
-        h = self.conf['h']
+    def _getMg2iMat(self, conf):
+        c1 = conf['c1']
+        s1 = conf['s1']
+        c2 = conf['c2']
+        s2 = conf['s2']
+        fu = conf['fu']
+        fv = conf['fv']
+        cu = conf['cu']
+        cv = conf['cv']
+        h = conf['h']
 
         Mg2i = np.zeros((4, 4), dtype=np.float32)
 
@@ -165,71 +166,4 @@ class IpmCanvas(app.Canvas, ipm):
             self.im = self._fbo.read()
             app.quit()
 
-def parse_cmdline(parser):
-    parser.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG, default=logging.INFO, help='Be verbose...')
-    parser.add_argument('-i', '--image', help='Image file')
-    parser.add_argument('-s', '--show', help='show Image', action='store_const', const=True, default=False)
-    parser.add_argument('-o', '--output', help='Output IPM filename', default="ipm.bmp")
-    parser.add_argument('-c', '--config', default='ipm.conf', help='IPM configuration file')
-
-    return parser.parse_args()
-
-def main():
-    vispy.set_log_level('DEBUG')
-    try:
-        vispy.use(app='glfw', gl='gl+')
-    except RuntimeError as e:
-        pass
-
-    logging.basicConfig(format=FORMAT)
-    parser = ArgumentParser(description= "Apply an Inverse Perspective Mapping on a img")
-    args = parse_cmdline(parser)
-    log = logging.getLogger("ipm openGL")
-    log.setLevel(args.verbose)
-    log.info("OpenGL acceleration to compute an IPM")
-
-    config = configparser.ConfigParser(inline_comment_prefixes=('#'))
-    try:
-        config.read(args.config)
-    except:
-        log.fatal("Incorrect config file!")
-        sys.exit()
-
-    conf = {}
-
-    if config.has_section('camera'):
-        conf['yaw'] = config.getfloat('camera', 'yaw') * np.pi / 180
-        conf['pitch'] = config.getfloat('camera', 'pitch') * np.pi / 180
-        conf['c1'] = np.cos(conf['pitch'])
-        conf['s1'] = np.sin(conf['pitch'])
-        conf['c2'] = np.cos(conf['yaw'])
-        conf['s2'] = np.sin(conf['yaw'])
-        conf['fu'] = config.getfloat('camera', 'focalLengthX')
-        conf['fv'] = config.getfloat('camera', 'focalLengthY')
-        conf['cu'] = config.getfloat('camera', 'opticalCenterX')
-        conf['cv'] = config.getfloat('camera', 'opticalCenterY')
-        conf['h'] = config.getfloat('camera', 'cameraHeight')
-    else:
-        log.fatal("Configuration file must have a camera section!")
-        sys.exit()
-
-    if config.has_section('ipm'):
-        conf['ipmWidth']  = config.getint('ipm', 'ipmWidth')
-        conf['ipmHeight']  = config.getint('ipm', 'ipmHeight')
-        conf['ipmTop']  = config.getint('ipm', 'ipmTop')
-        conf['ipmBottom'] = config.getint('ipm', 'ipmBottom')
-        conf['ipmLeft'] = config.getint('ipm', 'ipmLeft')
-        conf['ipmRight'] = config.getint('ipm', 'ipmRight')
-        conf['ipmInterpolation'] = config.getint('ipm', 'ipmInterpolation')
-    else:
-        log.fatal("Configuration file must have a IPM section!")
-        sys.exit()
-
-    c = IpmCanvas(args.image, conf)
-    app.run()
-    ipmImage = c.im
-    im = Image.frombuffer("RGBA", (c.im.shape[1], c.im.shape[0]), c.im.copy(order='C'), "raw", "RGBA", 0, 1)
-    if args.show is True:
-        im.show()
-    im.save(args.output)
 
