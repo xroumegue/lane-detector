@@ -31,6 +31,7 @@ class laneDetector:
         self.logger = logging.getLogger(DETECTOR_LOGGER_NAME)
         self.rawImage = None
         self.scaleImage = None
+        self.ipm = None
 
     def getEnergy(self, img):
         return np.sum(img*img)
@@ -133,7 +134,7 @@ class laneDetector:
 
         return ransacLines
 
-    def getIPM(self, useRaw=False):
+    def __initIPM(self):
         conf = {}
         conf['yaw'] = self.config.getfloat('camera', 'yaw') * np.pi / 180
         conf['pitch'] = self.config.getfloat('camera', 'pitch') * np.pi / 180
@@ -159,19 +160,22 @@ class laneDetector:
         _mode = self.config.get('ipm', 'method').upper()
         if _mode == "CPU":
             conf['ipmMethod'] = ipmMode.CPU
+            self.logger.info('IPM computed using CPU resources')
         elif _mode == "OPENGL":
             conf['ipmMethod'] = ipmMode.OPENGL
-
+            self.logger.info('IPM computed using GPU resources (OpenGL)')
+        # This computes once for all ROI, vanishing point
         myIpm = ipm(conf, DETECTOR_LOGGER_NAME)
-
-        myIpm.getVanishingPoint()
         self.logger.info('Vanishing point: (%.2f, %.2f)', myIpm.vp[0], myIpm.vp[1])
-        myIpm.getROI()
-        _img = self.scaleImage if useRaw is False else self.rawImage
-        outImg = myIpm.compute(_img, conf['ipmMethod'])
+        self.ipm = myIpm
 
+    def getIPM(self, useRaw=False):
+        if self.ipm is None:
+            self.__initIPM()
+        _img = self.scaleImage if useRaw is False else self.rawImage
+        outImg = self.ipm.compute(_img, self.ipm.conf['ipmMethod'])
 #        if len(outImg.shape) > 2 and outImg.shape[2] > 1:
-        if conf['ipmMethod'] is ipmMode.OPENGL:
+        if self.ipm.conf['ipmMethod'] is ipmMode.OPENGL:
             outImg = cv2.cvtColor(outImg, cv2.COLOR_RGB2GRAY)
             if useRaw is False:
                 outImg = self.scale(outImg)
