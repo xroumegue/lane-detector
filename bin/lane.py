@@ -21,7 +21,7 @@ def parse_cmdline(parser):
 	return parser.parse_args()
 
 def main():
-    parser = ArgumentParser(description= "Apply an Inverse Perspective Mapping on a img")
+    parser = ArgumentParser(description= "Detect lanes on road images")
     args = parse_cmdline(parser)
 
     detector = laneDetector.laneDetector()
