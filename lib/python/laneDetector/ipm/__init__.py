@@ -9,6 +9,12 @@ except:
     print("Error while importing PIL, please do: #pip install Pillow")
     sys.exit()
 
+from enum import Enum
+class ipmMode(Enum):
+    CPU = 1
+    OPENGL  = 2
+    OPENCL  = 3
+
 def interpolation(array,x,y):
     s = array.shape
     i = math.floor(x)
@@ -173,7 +179,7 @@ class ipmCore:
     def getROI(self):
         return self.roi
 
-    def compute(self, img):
+    def _computeCPU(self, img):
         width = self.conf['ipmWidth']
         height = self.conf['ipmHeight']
         right = self.conf['ipmRight']
@@ -210,6 +216,15 @@ class ipmCore:
 
         return self.out
 
+    def _computeGL(self, img):
+        c = ipmGL.__init__(self, img, self.conf, self.getROI(), self.logger)
+        return c.im
+
+    def compute(self, img, mode = ipmMode.OPENGL):
+        _compute = {}
+        _compute[ipmMode.CPU] = self._computeCPU
+        _compute[ipmMode.OPENGL] = self._computeGL
+        return _compute[mode](img)
 
 class ipm(ipmCore, ipmGL):
     def __init__(self, conf, loggerName = None):

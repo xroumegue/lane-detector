@@ -8,12 +8,6 @@ except:
     sys.exit()
 
 try:
-    from PIL import Image
-except:
-    print("Error while importing PIL, please do: #pip install Pillow")
-    sys.exit()
-
-try:
     import vispy
     from vispy import app
     from vispy import gloo
@@ -74,7 +68,10 @@ class ipmGL(app.Canvas):
         tex.interpolation = 'linear'
         tex.wrapping = 'repeat'
         self.program['iChannel'] = tex
-        self.program['iChannelResolution'] = (im.shape[1], im.shape[0], im.shape[2])
+        if len(im.shape) == 3:
+            self.program['iChannelResolution'] = (im.shape[1], im.shape[0], im.shape[2])
+        else:
+            self.program['iChannelResolution'] = (im.shape[1], im.shape[0], 1)
         self.program['iResolution'] = (self.size[0], self.size[1], 0.)
 
         self.getUniforms(conf, roi)

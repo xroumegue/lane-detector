@@ -4,7 +4,7 @@ import numpy as np
 import cv2
 from os.path import isfile
 from laneDetector import *
-from laneDetector.ipm import ipm
+from laneDetector.ipm import ipm, ipmMode
 from laneDetector.filters import filter
 from laneDetector.lines import lines
 from laneDetector.threshold import threshold
@@ -154,6 +154,13 @@ class laneDetector:
         conf['ipmLeft'] = self.config.getint('ipm', 'ipmLeft')
         conf['ipmRight'] = self.config.getint('ipm', 'ipmRight')
         conf['ipmInterpolation'] = self.config.getint('ipm', 'ipmInterpolation')
+        conf['ipmMethod'] = ipmMode.CPU
+
+        _mode = self.config.get('ipm', 'method').upper()
+        if _mode == "CPU":
+            conf['ipmMethod'] = ipmMode.CPU
+        elif _mode == "OPENGL":
+            conf['ipmMethod'] = ipmMode.OPENGL
 
         myIpm = ipm(conf, DETECTOR_LOGGER_NAME)
 
@@ -161,7 +168,11 @@ class laneDetector:
         self.logger.info('Vanishing point: (%.2f, %.2f)', myIpm.vp[0], myIpm.vp[1])
         myIpm.getROI()
         _img = self.scaleImage if useRaw is False else self.rawImage
-        outImg = myIpm.compute(_img)
+        outImg = myIpm.compute(_img, conf['ipmMethod'])
+
+#        if len(outImg.shape) > 2 and outImg.shape[2] > 1:
+        if conf['ipmMethod'] is ipmMode.OPENGL:
+            outImg = cv2.cvtColor(outImg, cv2.COLOR_RGB2GRAY)
+            if useRaw is False:
+                outImg = self.scale(outImg)
         return outImg
-
-
