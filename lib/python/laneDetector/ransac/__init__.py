@@ -4,12 +4,12 @@ from argparse import ArgumentParser, FileType, Action, Namespace
 import os
 import numpy as np;
 import cv2;
-import math;
 from itertools import accumulate
 from random import choices
 from ransac import ransacModel, getModel, doRansac
 from laneDetector.lines import line
 from sys import version_info
+from sympy import tan, sin, cos, atan2, sqrt, Point, Line, pi, Polygon
 
 RANSAC_LINE_DEFAULT_BOUNDING_BOX_WIDTH = 20
 RANSAC_LINE_DEFAULT_SAMPLES = 5
@@ -112,6 +112,22 @@ class ransac:
                 self.logger.debug("RANSAC did not fount out a line within this box %s", box);
                 continue
             self.logger.debug("Line standard equation: ax + by + c = 0: %s", ransac_fit);
-            ransac_lines.append(line([ransac_fit], imageBox = [(0, 0), (imgIn.shape[1] - 1, imgIn.shape[0] - 1)]))
+            a, b, c = ransac_fit
+            if not a and not b and not c:
+                raise ValueError("All lines parameters (a, b, c) are null!")
+            # Compute it as sympy Line wants
+            theta = atan2(b, a)
+            r = -c/sqrt(a*a + b*b)
+            if r < 0:
+                r = abs(r)
+                theta += pi
+                if theta > pi:
+                    theta -= 2 * pi
+            p1 = Point((r * cos(theta)), (r * sin(theta)))
+            slope = tan(pi/2 - theta)
+            roi = Polygon(Point(0, 0), Point(imgIn.shape[1] - 1, 0), Point(imgIn.shape[1] - 1, imgIn.shape[0] - 1), Point(0, imgIn.shape[0] - 1))
+            l = Line(p1, slope = slope)
+            pts = roi.intersection(l)
+            ransac_lines.append(line(*pts, imageBox = [(0, 0), (imgIn.shape[1] - 1, imgIn.shape[0] - 1)]))
 
         return ransac_lines

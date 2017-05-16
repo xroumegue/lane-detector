@@ -3,109 +3,62 @@ import configparser
 from argparse import ArgumentParser, FileType, Action, Namespace
 import os
 
+from sympy import Point
+from sympy.geometry import Line, intersection, Polygon
+
 import numpy as np;
 import cv2;
 import math;
 
-class line:
-    """ A class describing a line(https://en.wikipedia.org/wiki/Line_(geometry)) in a image """
-    def __init__(self, ptsPolar, score = None, imageBox = None, loggerName = None):
+class line(Line):
+    def __new__(self, *args, **kwargs):
+        loggerName = None
+        self.imageBox = None
+        score = None
+        if kwargs is not None:
+            __keys = kwargs.keys()
+            if 'loggerName' in __keys:
+                loggerName = kwargs['loggerName']
+            if 'imageBox' in __keys:
+                box = kwargs['imageBox']
+                self.imageBox = Polygon(Point(box[0][0], box[0][1]), Point(box[1][0], box[0][1]), Point(box[1][0], box[1][1]), Point(box[0][0], box[0][1]))
+            if 'score' in __keys:
+                score = kwargs['score']
+
         self.logger = logging.getLogger(loggerName)
-        self.pts = None
+        self.score = score
+        self.origin = None
         self.r = None
         self.theta = None
-        self.origin = None
-        self.score = score if score is not None else None
-        self.imageBox = imageBox if imageBox is not None else None
+        return super().__new__(self, *args, **kwargs)
 
-#       slope = np.tan(self.theta)
-#       intercept = self.r / np.sin(self.theta)
-
-        if (not isinstance(ptsPolar, list)):
-            self.logger.error("Must be a list")
-            return
-
-        if (not all(isinstance(_, tuple) for _ in ptsPolar)):
-            self.logger.error("Must have a list of points")
-            return
-
-        if (len(ptsPolar) > 2):
-            self.logger.error("Must have at most 2 tuples")
-            return
-
-        if len(ptsPolar) == 1:
-            if len(ptsPolar[0]) == 2:
-                self.r = ptsPolar[0][0]
-                self.theta = ptsPolar[0][1]
-            elif len(ptsPolar[0]) == 3:
-                """ ax + by + c = 0"""
-                a, b, c = ptsPolar[0]
-                if not a and not b and not c:
-                    raise ValueError("All lines parameters (a, b, c) are null!")
-                self.theta = math.atan2(b, a)
-                self.r = -c/math.sqrt(a*a + b*b)
-                if self.r < 0:
-                    self.r = math.fabs(self.r)
-                    self.theta += math.pi
-                    if self.theta > math.pi:
-                        self.theta -= 2 * math.pi
-        elif len(ptsPolar) == 2:
-            self.pts = ptsPolar
-
-        self.logger.debug("Line created: r(%s) theta(%s), pts(%s), Score(%s), ImageBox(%s)", self.r, self.theta, self.pts, self.score, self.imageBox)
-
-    def getBoundingBox(self, width):
-        pts = self.getCartesian()
-        # Vertical line
-        if pts[0][0] == pts[1][0]:
-            return [(max(self.imageBox[0][0], pts[0][0] - width), pts[0][1]),
-                    (min(self.imageBox[1][0], pts[1][0] + width), pts[1][1])]
-        elif pts[0][1] == pts[1][1]:
-            return [(pts[0][0], max(self.imageBox[0][1], pts[0][1] - width)),
-                    (pts[1][0], min(self.imageBox[1][1], pts[1][1] + width))]
+    def _getPolar(self):
+        #vertical line
+        if self.p1.y == self.p2.y:
+            self.r = abs(self.p1.x)
+            self.theta = 0. if self.p1.x >=0 else math.pi;
+        #Horizontal line
+        elif self.p1.y == self.p2.y:
+            self.r = abs(self.p1.y)
+            self.theta = math.pi/2 if self.p1.y >=0 else -math.pi/2;
+        # General case
         else:
-        # TODO
-            self.logger.error("General case of bounding box: untested, returning 4 points tuples")
-            a = (pts[1][0] - pts[0][0], pts[1][1] - pts[0][1])
-            l_a = math.sqrt(a[0]*a[0] + a[1]*a[1])
-            by = a[0] * width/l_a
-            bx = math.sqrt((width * width) - (by*by))
-            return [(min(pts[0][0], pts[1][0]) - bx,min(pts[0][1],pts[1][1]) - by),
-                    (min(pts[0][0], pts[1][0]) + bx,min(pts[0][1],pts[1][1]) + by),
-                    (max(pts[0][0], pts[1][0]) - bx,max(pts[0][1],pts[1][1]) - by),
-                    (max(pts[0][0], pts[1][0]) + bx,max(pts[0][1],pts[1][1]) + by)]
+            self.theta = math.atan2((self.p2.x - self.p1.x), (self.p1.y - self.p2.y))
+            self.r = r1 = self.p1.x * math.cos(self.theta) + self.p1.y * math.sin(self.theta)
+            r2 = self.p2.x * math.cos(self.theta) + self.p2.y * math.sin(self.theta)
+            if r1 < 0 or r2 < 0:
+                self.theta += math.pi
+                if self.theta > math.pi:
+                    self.theta -= 2 * math.pi
+                self.r = abs(r1)
 
+        return (self.r, self.theta)
 
+    def getPolar(self):
+        if self.r is None or self.theta is None:
+            self._getPolar()
 
-    def setImageBox(self, box):
-        self.imageBox = box
-
-    def getImageBox(self):
-        return self.imageBox
-
-    def setScore(self, score):
-        self.score = score
-
-    def getScore(self):
-        return self.score
-
-    def setPts(self, pts):
-        if pts is not None:
-            if (not isinstance(pts, list)):
-                self.logger.error("Must have a list of points")
-                return
-
-            if (not all(isinstance(_, tuple) for _ in pts)):
-                self.logger.error("Must have a list of points")
-                return
-
-            self.pts = pts
-        else:
-                self.logger.error("Point list must not be None")
-
-    def setPolar(self, r, theta):
-        self.r = r
-        self.theta = theta
+        return (self.r, self.theta)
 
     def _getOrigin(self):
         (r, theta) = self.getPolar()
@@ -119,103 +72,47 @@ class line:
 
         return self.origin
 
-    def _computeBox(self):
-        minX = min(self.pts[0][0], self.pts[1][0])
-        maxX = max(self.pts[0][0], self.pts[1][0])
-        minY = min(self.pts[0][1], self.pts[1][1])
-        maxY = max(self.pts[0][1], self.pts[1][1])
+    def setImageBox(self, box):
+        self.imageBox = Polygon(Point(box[0][0], box[0][1]), Point(box[1][0], box[0][1]), Point(box[1][0], box[1][1]), Point(box[0][0], box[0][1]))
 
-        if minX != maxX and minY != maxY:
-            pass
-        elif minX == maxX:
-            if minX != self.getImageBox()[0][0]:
-                minX -= 1
-            else:
-                maxX += 1
-        else:
-            if minY != self.getImageBox()[0][1]:
-                minY -= 1
-            else:
-                maxY += 1
+    def getImageBox(self):
+        return self.imageBox
 
-        self.box = [(minX, minY), (maxX, maxY)]
+    def setScore(self, score):
+        self.score = score
 
-    def _getCartesian(self):
-        if self.pts is not None:
-            return self.pts
-
-        if self.r is None or self.theta is None:
-            self.logger.error("A line must have either polar or cartesian coordinate")
-
-        if self.theta == math.pi or self.theta == 0:
-            # vertical lines
-            pts = [(self.r, self.imageBox[0][1]), (self.r, self.imageBox[1][1])]
-        elif self.theta == math.pi/2 or self.theta == -math.pi/2:
-            # Horizontal lines
-            pts = [(self.imageBox[0][0], self.r), (self.imageBox[1][0], self.r)]
-        else:
-            # General case
-            # r = x * cos(theta) + y * sin(theta)
-            o = self.getOrigin()
-            y = sorted([self.imageBox[0][1], self.imageBox[1][1]])
-            x = sorted([self.imageBox[0][0], self.imageBox[1][0]])
-
-            r = self.r
-            t = self.theta
-            sol = [
-                        ((r - y[1] * math.sin(t)) / math.cos(t), y[1]),
-                        ((r - y[0] * math.sin(t)) / math.cos(t), y[0]),
-                        ((x[0], (r - x[0] * math.cos(t)) / math.sin(t))),
-                        ((x[1], (r - x[1] * math.cos(t)) / math.sin(t))),
-            ]
-            pts = []
-            for _ in sol:
-                if  x[1] >= _[0] >= x[0]  and y[1] >= _[1] >= y[0]:
-                    pts.append(_)
-
-        self.pts = pts
-        self._computeBox()
-
-        return self.pts
+    def getScore(self):
+        return self.score
 
     def getCartesian(self, imageBox = None):
-        if self.pts is None:
-            if imageBox is None and self.imageBox is None:
-                self.logger.error("A box must be specified")
-                return
-            if imageBox is not None:
-                self.setImageBox(imageBox)
-            self._getCartesian()
 
-        return self.pts
+        (p1, p2) = self.points
+        return ((p1.x, p1.y), (p2.x, p2.y))
 
-    def getPolar(self):
-        if self.r is None or self.theta is None:
-            self._getPolar()
+    def getBoundingBox(self, width):
+        (p1, p2) = self.points
+        (xmin, ymin, xmax, ymax) = self.imageBox.bounds
 
-        return (self.r, self.theta)
-
-    def _getPolar(self):
-        #vertical line
-        if self.pts[0][0] == self.pts[1][0]:
-            self.r = abs(self.pts[0][0])
-            self.theta = 0. if self.pts[0][0] >=0 else math.pi;
-        #Horizontal line
-        elif self.pts[0][1] == self.pts[1][1]:
-            self.r = abs(self.pts[0][1])
-            self.theta = math.pi/2 if self.pts[0][1] >=0 else -math.pi/2;
-        # General case
+        # Vertical line
+        if p1.x == p2.x:
+            return [(max(xmin, p1.x - width), p1.y),
+                    (min(xmax, p2.x + width), p2.y)]
+        elif self.p1.y == self.p2.y:
+            return [(p1.x, max(ymin, p1.y - width)),
+                    (p2.x, min(ymax, p2.y + width))]
         else:
-            self.theta = math.atan2((self.pts[1][0] - self.pts[0][0])/(self.pts[0][1] - self.pts[1][1]))
-            self.r = r1 = self.pts[0][0] * math.cos(self.theta) + self.pts[0][1] * math.sin(self.theta)
-            r2 = self.pts[1][0] * math.cos(self.theta) + self.pts[1][1] * math.sin(self.theta)
-            if r1 < 0 or r2 < 0:
-                self.theta += math.pi
-                if self.theta > math.pi:
-                    self.theta -= 2 * math.pi
-                self.r = abs(r1)
+        # TODO
+            self.logger.error("General case of bounding box: untested, returning 4 points tuples")
+            a = (p2.x - p1.x, p2.y - p1.y)
+            l_a = math.sqrt(a[0]*a[0] + a[1]*a[1])
+            by = a[0] * width/l_a
+            bx = math.sqrt((width * width) - (by*by))
+            return [(min(p1.x, p2.x) - bx,min(p1.y, p2.y) - by),
+                    (min(p1.x, p2.x) + bx,min(p1.y, p2.y) + by),
+                    (max(p1.x, p2.x) - bx,max(p1.y, p2.y) - by),
+                    (max(p1.x, p2.x) + bx,max(p1.y, p2.y) + by)]
 
-        return (self.r, self.theta)
+
 
 class lines:
     """A class detecting lines in the image """
@@ -228,19 +125,20 @@ class lines:
         minD = self.conf['minDistance']
         i = 0
         while len(gLines) > 1 and i < len(gLines) - 1:
-            oA = np.asarray(gLines[i].getOrigin())
-            oB = np.asarray(gLines[i+1].getOrigin())
-            oD = oB - oA
-            d = np.linalg.norm(oD)
-            if d < minD:
-                # TODO/FIXME: Should we determine the new pow 'score weightly'
-                o = oA + oD/2
-                p = np.linalg.norm(o)
-                t = math.atan2(o[1], o[0])
+            l1 = gLines[i]
+            l2 = gLines[i+1]
+            # Assume vertical lanes
+            _box = Polygon(
+                    Point(l1.p1.x, l1.p1.y), Point(l1.p1.x + minD, l1.p1.y),
+                    Point(l1.p2.x + minD, l1.p2.y), Point(l1.p2.x, l1.p2.y)
+                )
+            if len(_box.intersection(Line(l2.p1, l2.p2))):
                 score = (gLines[i].getScore() + gLines[i+1].getScore()) / 2
+                p3 = (l1.p1 + l2.p1)/2
+                newLine = line(Point(p3.x, l1.p1.y), Point(p3.x, l1.p2.y), score = score, imageBox = self.conf['imageBox'])
                 self.logger.debug("Grouping line {} with {} to {}".format(
-                                gLines[i].getPolar(), gLines[i+1].getPolar(), (p, t)))
-                gLines[i] = line([(p, t)], score, imageBox = self.conf['imageBox'])
+                                gLines[i].points, gLines[i+1].points, newLine.points))
+                gLines[i] = newLine
                 del gLines[i+1]
             else:
                 i += 1
@@ -302,11 +200,11 @@ class lines:
             _, a = cv2.solve(x, y, flags = cv2.DECOMP_SVD)
             indexSub = float((-0.5 * a[1]/a[0]) + index)
             if lineType == 'horizontal':
-                myLine = [(0.5, indexSub + 0.5), (imgIn.shape[1] - 0.5, indexSub + 0.5)]
+                myLine = [Point(0.5, indexSub + 0.5), Point(imgIn.shape[1] - 0.5, indexSub + 0.5)]
             elif lineType == 'vertical':
-                myLine = [(indexSub + 0.5, 0.5), (indexSub + 0.5, imgIn.shape[0] - 0.5)]
+                myLine = [Point(indexSub + 0.5, 0.5), Point(indexSub + 0.5, imgIn.shape[0] - 0.5)]
 
-            lines.append(line(myLine, imgVector[index], imageBox = self.conf['imageBox']))
+            lines.append(line(*myLine, score = imgVector[index], imageBox = self.conf['imageBox']))
 
         for _line in lines:
             self.logger.debug("%s lines detected: %s", lineType, _line.getCartesian())
