@@ -164,6 +164,10 @@ class laneDetector:
         elif _mode == "OPENGL":
             conf['ipmMethod'] = ipmMode.OPENGL
             self.logger.info('IPM computed using GPU resources (OpenGL)')
+        elif _mode == "OPENCV":
+            conf['ipmMethod'] = ipmMode.OPENCV
+            self.logger.info('IPM computed using resources (OpenCV)')
+
         # This computes once for all ROI, vanishing point
         myIpm = ipm(conf, DETECTOR_LOGGER_NAME)
         self.logger.info('Vanishing point: (%.2f, %.2f)', myIpm.vp[0], myIpm.vp[1])

@@ -3,6 +3,7 @@ import numpy as np
 import math
 import laneDetector
 from laneDetector.ipm.gl import ipmGL
+import cv2
 try:
     from PIL import Image
 except:
@@ -14,6 +15,7 @@ class ipmMode(Enum):
     CPU = 1
     OPENGL  = 2
     OPENCL  = 3
+    OPENCV  = 4
 
 def interpolation(array,x,y):
     s = array.shape
@@ -143,6 +145,41 @@ class ipmCore:
                     }
                 }
 
+#              (Vp)
+#               /|\
+#             A/_|_\B
+#             /  |  \
+#            /   |   \
+#           /    |    \
+#          /     |     \
+#        C ------|------D
+#            l1     l2
+        h = ipmBottom - vp[1]
+        l1 = vp[0] - ipmLeft
+        l2 = ipmRight - vp[0]
+        theta = math.atan2(h, l1)
+        beta = math.atan2(h, l2)
+        Ax = ipmLeft + ((ipmBottom - ipmTop)/math.tan(theta))
+        Bx = ipmRight - ((ipmBottom - ipmTop)/math.tan(beta))
+
+        quadrangeSrc = np.float32(
+                    [
+                        [Ax, ipmTop],
+                        [Bx, ipmTop],
+                        [ipmRight, ipmBottom],
+                        [ipmLeft, ipmBottom]
+                    ]
+                )
+        rectangleSrc = np.float32(
+                    [
+                        [0, 0],
+                        [ipmWidth - 1, 0],
+                        [ipmWidth - 1, ipmHeight - 1],
+                        [0, ipmHeight -1 ]
+                    ]
+                )
+        self.M = cv2.getPerspectiveTransform(quadrangeSrc, rectangleSrc)
+
         self.logger.debug('wROI: (%.2f, %.2f)(%.2f,%.2f)', _ROI['x']['min'], _ROI['y']['min'], _ROI['x']['max'], _ROI['y']['max'])
         return _ROI
 
@@ -178,6 +215,12 @@ class ipmCore:
 
     def getROI(self):
         return self.roi
+
+    def _computeCV(self, img):
+        width = self.conf['ipmWidth']
+        height = self.conf['ipmHeight']
+        self.out = cv2.warpPerspective(img, self.M, (width, height))
+        return self.out
 
     def _computeCPU(self, img):
         width = self.conf['ipmWidth']
@@ -223,6 +266,7 @@ class ipmCore:
     def compute(self, img, mode = ipmMode.OPENGL):
         _compute = {}
         _compute[ipmMode.CPU] = self._computeCPU
+        _compute[ipmMode.OPENCV] = self._computeCV
         _compute[ipmMode.OPENGL] = self._computeGL
         return _compute[mode](img)
 
