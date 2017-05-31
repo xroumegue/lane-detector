@@ -1,6 +1,7 @@
 #include "opencv_camera_display.h"
 
 #include <VX/vx.h>
+#include <getopt.h>
 /*
  * Useful macros for OpenVX error checking:
  *   ERROR_CHECK_STATUS     - check whether the status is VX_SUCCESS
@@ -34,14 +35,121 @@ void VX_CALLBACK log_callback( vx_context    context,
 	printf( "LOG: [ status = %d ] %s\n", status, string );
 	fflush( stdout );
 }
+
+// width and height for intermidiate images
+#define INTERNAL_WIDTH  220
+#define INTERNAL_HEIGHT 240
+
+// Below are several parameters to define road area for mapping and processing.
+
+// Relative height of vanishing point or distance from bottom camera view border to horizon line.
+// It is supposed that horizon is parallel to camera view borders
+#define REMAP_HORIZON      0.435f
+
+// Relative height of point where left and right lines can be distinguished.
+// It is distance from bottom camera view border
+// to the farest point on the road that will be mapped.
+// It has to be slightly less than REMAP_HORIZON
+#define REMAP_FAR_CLIP      ((REMAP_HORIZON)-0.05f)
+
+// Relative height of hood’s front not to detect line segments on it.
+// It is distance from bottom camera border
+// to the nearest point on the road that will be mapped.
+#define REMAP_NEAR_CLIP     0.17f
+
+// Relative width of the mapped road area for the REMAP_NEAR_CLIP
+// This value correlates with road width that will be processed
+#define REMAP_NEAR_WIDTH    0.95f
+//   ^
+//   |               Camera View
+//   +1.0 +------------------------------------+------- top border (1.0)
+//   |    |                                    |
+//   |    |                                    |
+//   |    |                                    |
+//   |    |                                    |
+//   |    |-----------------.------------------|-'-REMAP_HORIZON (0.435)
+//   +0.5 |                . .                 | |
+//   |    |               1---3 - - - - - - - -|-+-'-REMAP_FAR_CLIP (0.385)
+//   |    |              /M A P\               | | |
+//   |    |             /A R E A\              | | |
+//   |    |            0---------2 - - - - - - |-+-+-'-REMAP_NEAR_CLIP (0.17)
+//   |    |                                    | | | |
+//   +0.0 +------------------------------------+-'-'-'-- bottom border (0.0)
+//                     |         |
+//                     '---------'
+//                     NEAR_WIDTH
+
+static void calcLaneArea(int width, int height, cv::Point2f laneArea[4])
+{
+    // Calc lane area from REMAP_HORIZON, REMAP_FAR_CLIP, REMAP_NEAR_CLIP and REMAP_NEAR_WIDTH parameters.
+    // In general any 4 points can be defined below
+    float dxFar = 0.5f * REMAP_NEAR_WIDTH * (REMAP_FAR_CLIP - REMAP_HORIZON) / (REMAP_NEAR_CLIP - REMAP_HORIZON);
+    float dxNear = 0.5f * REMAP_NEAR_WIDTH;
+    laneArea[0].x = (0.5f-dxNear)*width; laneArea[0].y = (1.0f-REMAP_NEAR_CLIP)*height;
+    laneArea[1].x = (0.5f-dxFar) *width; laneArea[1].y = (1.0f-REMAP_FAR_CLIP) *height;
+    laneArea[2].x = (0.5f+dxNear)*width; laneArea[2].y = (1.0f-REMAP_NEAR_CLIP)*height;
+    laneArea[3].x = (0.5f+dxFar) *width; laneArea[3].y = (1.0f-REMAP_FAR_CLIP) *height;
+}
+// function that calculate perspective transformation matrix from camera (width,height) map area to
+// whole internal top view (0,0)-(INTERNAL_WIDTH, INTERNAL_HEIGHT)
+static cv::Mat calcPerspectiveTransform(int width, int height)
+{// calc perspective transform from 4 points
+    // define persepctive transform by 4 points placed on road
+    cv::Point2f srcP[4];
+    calcLaneArea(width,height,srcP);
+    cv::Point2f dstP[4] =
+    {
+        {0                      , 0},
+        {(float)(INTERNAL_WIDTH), 0},
+        {0                      , (float)(INTERNAL_HEIGHT)},
+        {(float)(INTERNAL_WIDTH), (float)(INTERNAL_HEIGHT)}
+    };
+    return cv::getPerspectiveTransform(dstP,srcP);
+}
+
 /*
  * Command-line usage:
  *   % lane [<video-sequence>|<camera-device-number>]
  */
 int main( int argc, char * argv[] )
 {
-	const char * video_sequence = argv[1];
-	CGuiModule gui( video_sequence );
+	static struct {
+		const char *video_sequence;
+		int verbose_flag;
+		int help_flag;
+	} opts = {
+		.video_sequence = NULL,
+		.verbose_flag = 0,
+	};
+
+	while(1) {
+		int option_index, c;
+		static struct option long_options[] = {
+			/* These options set a flag. */
+			{"verbose", no_argument, &opts.verbose_flag, 1},
+			{"help", no_argument, &opts.help_flag, 1},
+			/* These options don't set a flag. */
+			{"file", required_argument, 0, 'f'},
+			{0, 0, 0, 0}
+		};
+		c = getopt_long(argc, argv, "vhf:", long_options, &option_index);
+		if (c == -1)
+			break;
+		switch(c) {
+			case 0:
+				printf("%s mode activated\n", long_options[option_index].name);
+			break;
+			case 'f':
+				opts.video_sequence = optarg;
+				printf("video file: %s\n", optarg);
+			break;
+			default:
+				printf("Going to abort: %c", c);
+				abort();
+		}
+	}
+
+	CGuiModule gui( opts.video_sequence );
 
 /*
 	Try to grab the first video frame from the sequence using cv::VideoCapture
