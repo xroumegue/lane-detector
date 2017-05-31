@@ -44,18 +44,18 @@ void VX_CALLBACK log_callback( vx_context    context,
 
 // Relative height of vanishing point or distance from bottom camera view border to horizon line.
 // It is supposed that horizon is parallel to camera view borders
-#define REMAP_HORIZON      0.435f
+#define REMAP_HORIZON      0.6458f
 
 // Relative height of point where left and right lines can be distinguished.
 // It is distance from bottom camera view border
 // to the farest point on the road that will be mapped.
 // It has to be slightly less than REMAP_HORIZON
-#define REMAP_FAR_CLIP      ((REMAP_HORIZON)-0.05f)
+#define REMAP_FAR_CLIP      ((REMAP_HORIZON)-0.10f)
 
 // Relative height of hood’s front not to detect line segments on it.
 // It is distance from bottom camera border
 // to the nearest point on the road that will be mapped.
-#define REMAP_NEAR_CLIP     0.17f
+#define REMAP_NEAR_CLIP     0.2708f
 
 // Relative width of the mapped road area for the REMAP_NEAR_CLIP
 // This value correlates with road width that will be processed
@@ -92,19 +92,50 @@ static void calcLaneArea(int width, int height, cv::Point2f laneArea[4])
 }
 // function that calculate perspective transformation matrix from camera (width,height) map area to
 // whole internal top view (0,0)-(INTERNAL_WIDTH, INTERNAL_HEIGHT)
-static cv::Mat calcPerspectiveTransform(int width, int height)
+static cv::Mat calcPerspectiveTransform(int width, int height, int outWidth, int outHeight)
 {// calc perspective transform from 4 points
     // define persepctive transform by 4 points placed on road
     cv::Point2f srcP[4];
     calcLaneArea(width,height,srcP);
     cv::Point2f dstP[4] =
     {
-        {0                      , 0},
-        {(float)(INTERNAL_WIDTH), 0},
-        {0                      , (float)(INTERNAL_HEIGHT)},
-        {(float)(INTERNAL_WIDTH), (float)(INTERNAL_HEIGHT)}
+        {0                , (float)(outHeight)},
+        {0                , 0},
+        {(float)(outWidth), (float)(outHeight)},
+        {(float)(outWidth), 0},
     };
     return cv::getPerspectiveTransform(dstP,srcP);
+}
+
+static int vxShowImage(vx_image _img, const char *name)
+{
+		vx_uint32  _width, _height;
+		ERROR_CHECK_STATUS(vxQueryImage(_img, VX_IMAGE_WIDTH, &_width, sizeof(vx_uint32)));
+		ERROR_CHECK_STATUS(vxQueryImage(_img, VX_IMAGE_HEIGHT, &_height, sizeof(vx_uint32)));
+		vx_rectangle_t rect = { 0, 0, _width, _height };
+		vx_map_id map_id;
+		vx_imagepatch_addressing_t addr;
+		void * ptr;
+		ERROR_CHECK_STATUS(
+			vxMapImagePatch(
+				_img,
+				&rect,
+				0,
+				&map_id,
+				&addr,
+				&ptr,
+				VX_READ_ONLY,
+				VX_MEMORY_TYPE_HOST,
+				VX_NOGAP_X
+			)
+		);
+		cv::Mat mat(_height, _width, CV_8U, ptr, addr.stride_y);
+		cv::imshow( name, mat );
+		ERROR_CHECK_STATUS(
+			vxUnmapImagePatch(
+				_img,
+				map_id)
+		);
 }
 
 /*
@@ -164,6 +195,8 @@ int main( int argc, char * argv[] )
 	vx_uint32 width = gui.GetWidth();
 	vx_uint32 height = gui.GetHeight();
 	vx_uint32 stride = gui.GetStride();
+	int internalWidth = width;
+	int internalHeight= height;
 
 	/* Create vx context */
 	vx_context context = vxCreateContext();
@@ -183,16 +216,33 @@ int main( int argc, char * argv[] )
 	/*		.... GRAYSCALE image */
 	vx_image luma_image = vxCreateImage(context, width, height, VX_DF_IMAGE_U8);
 	ERROR_CHECK_OBJECT(luma_image);
-
+	/*		... WARP (IPM) image */
+	vx_image ipm_image = vxCreateImage(context, internalWidth, internalHeight, VX_DF_IMAGE_U8);
+	ERROR_CHECK_OBJECT(ipm_image);
 
 	/*		.... YUV (virtual) image */
 	vx_image yuv_image  = vxCreateVirtualImage( graph, width, height, VX_DF_IMAGE_IYUV );
 	ERROR_CHECK_OBJECT(yuv_image);
 
+
+        cv::Mat ocvH;
+        calcPerspectiveTransform(width, height, internalWidth, internalHeight).convertTo(ocvH, CV_32F);
+        vx_matrix ovxH = vxCreateMatrix(context, VX_TYPE_FLOAT32, 3, 3);
+        vx_float32  data[9] =
+        {
+            ocvH.at<float>(0,0),ocvH.at<float>(1,0),ocvH.at<float>(2,0),
+            ocvH.at<float>(0,1),ocvH.at<float>(1,1),ocvH.at<float>(2,1),
+            ocvH.at<float>(0,2),ocvH.at<float>(1,2),ocvH.at<float>(2,2)
+        };
+        printf("Warp Perspective Matrix = 9::%f,%f,%f,%f,%f,%f,%f,%f,%f\n",data[0],data[1],data[2],data[3],data[4],data[5],data[6],data[7],data[8]);
+        ERROR_CHECK_STATUS( vxCopyMatrix(ovxH, &data, VX_WRITE_ONLY, VX_MEMORY_TYPE_HOST) );
+
+
 	/* Create nodes */
 	vx_node nodes[] = {
-	    vxColorConvertNode(graph, input_rgb_image, yuv_image),
-	    vxChannelExtractNode(graph, yuv_image, VX_CHANNEL_Y, luma_image),
+		vxColorConvertNode(graph, input_rgb_image, yuv_image),
+		vxChannelExtractNode(graph, yuv_image, VX_CHANNEL_Y, luma_image),
+		vxWarpPerspectiveNode(graph, luma_image, ovxH, VX_INTERPOLATION_BILINEAR, ipm_image),
 	};
 
 	/* Check each node.. and release it since already refcounted by graph */
@@ -239,31 +289,8 @@ int main( int argc, char * argv[] )
 			vxProcessGraph(graph)
 		);
 		/* Get output image */
-		vx_rectangle_t rect = { 0, 0, width, height };
-		vx_map_id map_id;
-		vx_imagepatch_addressing_t addr;
-		void * ptr;
-		ERROR_CHECK_STATUS(
-			vxMapImagePatch(
-				luma_image,
-				&rect,
-				0,
-				&map_id,
-				&addr,
-				&ptr,
-				VX_READ_ONLY,
-				VX_MEMORY_TYPE_HOST,
-				VX_NOGAP_X
-			)
-		);
-		cv::Mat mat(height, width, CV_8U, ptr, addr.stride_y);
-		cv::imshow( "Grayscale", mat );
-		ERROR_CHECK_STATUS(
-			vxUnmapImagePatch(
-				luma_image,
-				map_id)
-		);
-
+		vxShowImage(luma_image, "Grayscale");
+		vxShowImage(ipm_image, "IPM");
 		gui.Show();
 		if(!gui.Grab()) {
 			/* Terminate the processing loop if the end of sequence is detected. */
@@ -276,6 +303,7 @@ int main( int argc, char * argv[] )
 	ERROR_CHECK_STATUS(vxReleaseGraph(&graph));
 	ERROR_CHECK_STATUS(vxReleaseImage(&input_rgb_image));
 	ERROR_CHECK_STATUS(vxReleaseImage(&luma_image));
+	ERROR_CHECK_STATUS(vxReleaseImage(&ipm_image));
 	ERROR_CHECK_STATUS(vxReleaseContext(&context));
 
 	return 0;
