@@ -78,6 +78,16 @@ void VX_CALLBACK log_callback( vx_context    context,
 //                     |         |
 //                     '---------'
 //                     NEAR_WIDTH
+//
+//
+
+/*
+ *  Canny edge detector
+ */
+
+#define CANNY_SOBEL_FILTER_SIZE 3
+#define CANNY_THRESH_MIN 160
+#define CANNY_THRESH_MAX 180
 
 static void calcLaneArea(int width, int height, cv::Point2f laneArea[4])
 {
@@ -220,6 +230,10 @@ int main( int argc, char * argv[] )
 	vx_image ipm_image = vxCreateImage(context, internalWidth, internalHeight, VX_DF_IMAGE_U8);
 	ERROR_CHECK_OBJECT(ipm_image);
 
+	/*		... canny image */
+	vx_image canny_image = vxCreateImage(context, internalWidth, internalHeight, VX_DF_IMAGE_U8);
+	ERROR_CHECK_OBJECT(canny_image);
+
 	/*		.... YUV (virtual) image */
 	vx_image yuv_image  = vxCreateVirtualImage( graph, width, height, VX_DF_IMAGE_IYUV );
 	ERROR_CHECK_OBJECT(yuv_image);
@@ -237,12 +251,23 @@ int main( int argc, char * argv[] )
         printf("Warp Perspective Matrix = 9::%f,%f,%f,%f,%f,%f,%f,%f,%f\n",data[0],data[1],data[2],data[3],data[4],data[5],data[6],data[7],data[8]);
         ERROR_CHECK_STATUS( vxCopyMatrix(ovxH, &data, VX_WRITE_ONLY, VX_MEMORY_TYPE_HOST) );
 
+	/*  Canny edge detector */
+
+	vx_int32 ovxCannyGradientSize = CANNY_SOBEL_FILTER_SIZE;
+	vx_uint32 ovxThreshCannyMin = CANNY_THRESH_MIN;
+	vx_uint32 ovxThreshCannyMax = CANNY_THRESH_MAX;
+	vx_threshold ovxThreshCanny = vxCreateThreshold(context, VX_THRESHOLD_TYPE_RANGE, VX_TYPE_UINT8);
+	vxSetThresholdAttribute(ovxThreshCanny, VX_THRESHOLD_THRESHOLD_LOWER, &ovxThreshCannyMin,
+	                        sizeof(ovxThreshCannyMin));
+	vxSetThresholdAttribute(ovxThreshCanny, VX_THRESHOLD_THRESHOLD_UPPER, &ovxThreshCannyMax,
+                            sizeof(ovxThreshCannyMax));
 
 	/* Create nodes */
 	vx_node nodes[] = {
 		vxColorConvertNode(graph, input_rgb_image, yuv_image),
 		vxChannelExtractNode(graph, yuv_image, VX_CHANNEL_Y, luma_image),
 		vxWarpPerspectiveNode(graph, luma_image, ovxH, VX_INTERPOLATION_BILINEAR, ipm_image),
+		vxCannyEdgeDetectorNode(graph, ipm_image, ovxThreshCanny, ovxCannyGradientSize, VX_NORM_L1, canny_image),
 	};
 
 	/* Check each node.. and release it since already refcounted by graph */
@@ -291,6 +316,7 @@ int main( int argc, char * argv[] )
 		/* Get output image */
 		vxShowImage(luma_image, "Grayscale");
 		vxShowImage(ipm_image, "IPM");
+		vxShowImage(canny_image, "Canny");
 		gui.Show();
 		if(!gui.Grab()) {
 			/* Terminate the processing loop if the end of sequence is detected. */
@@ -304,6 +330,7 @@ int main( int argc, char * argv[] )
 	ERROR_CHECK_STATUS(vxReleaseImage(&input_rgb_image));
 	ERROR_CHECK_STATUS(vxReleaseImage(&luma_image));
 	ERROR_CHECK_STATUS(vxReleaseImage(&ipm_image));
+	ERROR_CHECK_STATUS(vxReleaseImage(&canny_image));
 	ERROR_CHECK_STATUS(vxReleaseContext(&context));
 
 	return 0;
