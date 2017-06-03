@@ -2,6 +2,7 @@
 
 #include <VX/vx.h>
 #include <getopt.h>
+#include <OpenCV_VX_Functions.h>
 /*
  * Useful macros for OpenVX error checking:
  *   ERROR_CHECK_STATUS     - check whether the status is VX_SUCCESS
@@ -215,6 +216,8 @@ int main( int argc, char * argv[] )
 	vxRegisterLogCallback( context, log_callback, vx_false_e );
 	vxAddLogEntry( ( vx_reference ) context, VX_FAILURE, "OpenVX something application\n" );
 
+	/* Load kernels extension */
+	vxLoadKernels(context, "vx_ext_cv");
 	/* Create a graph */
 	vx_graph graph = vxCreateGraph(context);
 	ERROR_CHECK_OBJECT(graph);
@@ -262,12 +265,27 @@ int main( int argc, char * argv[] )
 	vxSetThresholdAttribute(ovxThreshCanny, VX_THRESHOLD_THRESHOLD_UPPER, &ovxThreshCannyMax,
                             sizeof(ovxThreshCannyMax));
 
+
+	/* Hough lines probablistic detection */
+	#define HOUGH_RHO_RESOLUTION 2
+	#define HOUGH_THETA_RESOLUTION (CV_PI / 180)
+	#define HOUGH_THRESHOLD 30
+	#define HOUGH_MIN_LINE_LENGTH 16
+	#define HOUGH_MAX_LINE_GAP 6
+	#define HOUGH_MAX_LINES 100
+
+	vx_array ovxLineArray = vxCreateArray(context, VX_TYPE_RECTANGLE, HOUGH_MAX_LINES);
+	ERROR_CHECK_OBJECT(ovxLineArray);
+	vx_scalar ovxLineCount = vxCreateScalar(context, VX_TYPE_INT32, NULL);
+	ERROR_CHECK_OBJECT(ovxLineCount);
+
 	/* Create nodes */
 	vx_node nodes[] = {
 		vxColorConvertNode(graph, input_rgb_image, yuv_image),
 		vxChannelExtractNode(graph, yuv_image, VX_CHANNEL_Y, luma_image),
 		vxWarpPerspectiveNode(graph, luma_image, ovxH, VX_INTERPOLATION_BILINEAR, ipm_image),
 		vxCannyEdgeDetectorNode(graph, ipm_image, ovxThreshCanny, ovxCannyGradientSize, VX_NORM_L1, canny_image),
+		vxExtCvNode_houghHarrisLine(graph, canny_image, ovxLineArray, HOUGH_RHO_RESOLUTION, HOUGH_THETA_RESOLUTION, HOUGH_THRESHOLD, HOUGH_MIN_LINE_LENGTH, HOUGH_MAX_LINE_GAP, ovxLineCount),
 	};
 
 	/* Check each node.. and release it since already refcounted by graph */

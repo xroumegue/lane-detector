@@ -7,7 +7,7 @@ include_directories(${OpenVX_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
 link_directories(${OpenVX_LIBS_DIR}) 
 set(lane_SRCS lane.cpp)
 add_executable(lane ${lane_SRCS})
-target_link_libraries(lane ${OpenVX_LIBRARIES} ${OpenCV_LIBRARIES})
-
+get_filename_component(OpenVX_LIBDIR ${OpenVX_LIBRARIES} DIRECTORY)
+target_link_libraries(lane ${OpenVX_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenVX_LIBDIR}/libvx_ext_cv.so)
 
 set(CMAKE_VERBOSE_MAKEFILE TRUE)
