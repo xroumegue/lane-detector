@@ -56,7 +56,7 @@ void VX_CALLBACK log_callback( vx_context    context,
 // Relative height of hood’s front not to detect line segments on it.
 // It is distance from bottom camera border
 // to the nearest point on the road that will be mapped.
-#define REMAP_NEAR_CLIP     0.2708f
+#define REMAP_NEAR_CLIP     0.30f
 
 // Relative width of the mapped road area for the REMAP_NEAR_CLIP
 // This value correlates with road width that will be processed
@@ -331,6 +331,40 @@ int main( int argc, char * argv[] )
 		ERROR_CHECK_STATUS(
 			vxProcessGraph(graph)
 		);
+
+		/* Compute */
+		vx_int32 lineCount;
+		vxCopyScalar(ovxLineCount, &lineCount, VX_READ_ONLY, VX_MEMORY_TYPE_HOST);
+
+		vx_map_id map_id;
+		vx_size stride = 0;
+		char*ptr = NULL;
+
+		std::vector<cv::Vec4i> lines;
+		lines.clear();
+		if (lineCount) {
+			lines.resize(lineCount);
+			ERROR_CHECK_STATUS(vxMapArrayRange(ovxLineArray, 0, lineCount, &map_id, &stride, (void **)&ptr, VX_READ_ONLY, VX_MEMORY_TYPE_HOST, 0));
+			printf("Hough detected %d lines detected.\n", lineCount);
+
+			for (int i = 0; i < lineCount; ++i) {
+				std::vector<cv::Point2f> in(2);
+				std::vector<cv::Point2f> out(2);
+				vx_rectangle_t *rect = (vx_rectangle_t *) (ptr + stride * i);
+				lines[i][0] = rect->start_x;
+				lines[i][1] = rect->start_y;
+				in[0] = cv::Point2f(rect->start_x, rect->start_y);
+				lines[i][2] = rect->end_x;
+				lines[i][3] = rect->end_y;
+				in[1] = cv::Point2f(rect->end_x, rect->end_y);
+
+				cv::perspectiveTransform(in, out, ocvH);
+				gui.DrawArrow(out[0].x, out[0].y, out[1].x, out[1].y);
+			}
+
+			ERROR_CHECK_STATUS(vxUnmapArrayRange(ovxLineArray, map_id));
+		}
+
 		/* Get output image */
 		vxShowImage(luma_image, "Grayscale");
 		vxShowImage(ipm_image, "IPM");
@@ -344,12 +378,16 @@ int main( int argc, char * argv[] )
 	}
 
 	/* Clean the dirty place */
-	ERROR_CHECK_STATUS(vxReleaseGraph(&graph));
 	ERROR_CHECK_STATUS(vxReleaseImage(&input_rgb_image));
 	ERROR_CHECK_STATUS(vxReleaseImage(&luma_image));
 	ERROR_CHECK_STATUS(vxReleaseImage(&ipm_image));
 	ERROR_CHECK_STATUS(vxReleaseImage(&canny_image));
+	ERROR_CHECK_STATUS(vxReleaseScalar(&ovxLineCount));
+	ERROR_CHECK_STATUS(vxReleaseArray(&ovxLineArray));
+	ERROR_CHECK_STATUS(vxReleaseThreshold(&ovxThreshCanny));
+	ERROR_CHECK_STATUS(vxReleaseMatrix(&ovxH));
 	ERROR_CHECK_STATUS(vxReleaseContext(&context));
+	ERROR_CHECK_STATUS(vxReleaseGraph(&graph));
 
 	return 0;
 }
